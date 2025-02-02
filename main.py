@@ -3,9 +3,9 @@ import pygame
 import os
 # import sys
 
-GROUND_LEVEL = 500
+GROUND_LEVEL = 800
 GRAVITY = 1
-JUMP_V = 20
+JUMP_V = 16
 WALK_V = 6
 SPRINT_V = 8
 V_MAX = 75
@@ -65,8 +65,14 @@ class Player(pygame.sprite.Sprite):
         if self.onGround:
             if not self.jumping:
                 self.jumping = True
+                self.velocity[1] = -JUMP_V
 
     def update(self):
+        if self.rect.y >= GROUND_LEVEL:
+            self.onGround = True
+        else:
+            self.onGround = False
+
         self.velocity[0] = 0
         if self.right:
             self.image = self.src_image
@@ -86,71 +92,30 @@ class Player(pygame.sprite.Sprite):
             self.velocity[1] -= JUMP_V
             self.jumping = False
 
-        if self.gr:
-            if self.rect.y + self.velocity[1] > self.gr:
-                self.velocity[1] = self.gr - self.rect.y
-                self.gr = None
+        self.rect.x += self.velocity[0]
+        self.check_x_collisions()
 
-        self.rect = pygame.Rect(self.rect.x + self.velocity[0], self.rect.y + self.velocity[1], self.rect.width,
-                                self.rect.height)
+        self.rect.y += self.velocity[1]
+        self.check_y_collisions()
 
-        collides = self.check_collides()
-        if collides:
-            sides = []
-            for side, obj in collides:
-                if DEBUG_MODE:
-                    debug_text.append(f"SIDE {side}")
-                sides.append(side)
-                if side == "top":
-                    self.rect.y = obj.rect.y - self.rect.height + 1
-                    self.onGround = True
-                if side == "left":
-                    self.rect.x = obj.rect.x - obj.rect.width - 1
-                    self.velocity[0] = 0
-                    self.onGround = False
-                if side == "right":
-                    self.rect.x = obj.rect.x + obj.rect.width + 1
-                    self.velocity[0] = 0
-                    self.onGround = False
-                if side == "bottom":
-                    self.rect.y = obj.rect.y + obj.rect.height + 1
-                    self.velocity[1] = -self.velocity[1]//5
-            if ("top" in sides and "left" in sides) or ("top" in sides and "right" in sides):
+    def check_x_collisions(self):
+        collisions = pygame.sprite.spritecollide(self, collide_tiles, False)
+        for tile in collisions:
+            if self.velocity[0] > 0:  # Moving right; Hit the left side of the wall
+                self.rect.right = tile.rect.left
+            elif self.velocity[0] < 0:  # Moving left; Hit the right side of the wall
+                self.rect.left = tile.rect.right
+
+    def check_y_collisions(self):
+        collisions = pygame.sprite.spritecollide(self, collide_tiles, False)
+        for tile in collisions:
+            if self.velocity[1] > 0:  # Falling down; Hit the top side of the wall
+                self.rect.bottom = tile.rect.top
                 self.onGround = True
-        else:
-            self.onGround = False
-        self.gr = self.check_ground()
-
-
-    def check_ground(self):
-        if not self.onGround:
-            for i in range(self.rect.y, self.rect.y+self.velocity[1], 1):
-                rects = [i.rect for i in collide_tiles.sprites()]
-                r = pygame.Rect(self.rect.x, i + self.rect.height, self.rect.width, 1)
-                coll_rect = r.collideobjects(rects)
-                if coll_rect:
-                    return i
-            return None
-
-    def check_collides(self):
-        collides = pygame.sprite.spritecollide(self, collide_tiles, False)
-        r = []
-        for obj in collides:
-            collide_side = None
-            top = obj.rect.y + obj.rect.height * 0.2 > self.rect.y + self.rect.height
-            bottom = obj.rect.y + obj.rect.height * 0.8 < self.rect.y
-            left = obj.rect.centerx > self.rect.x + self.rect.width
-            right = obj.rect.centerx < self.rect.x + self.rect.width
-            if top and not bottom:
-                collide_side = "top"
-            elif bottom and not top and not left and not right:
-                collide_side = "bottom"
-            if left and not right and not top and not bottom:
-                collide_side = "left"
-            elif right and not left and not top and not bottom:
-                collide_side = "right"
-            r.append((collide_side, obj))
-        return r
+                self.velocity[1] = 0
+            elif self.velocity[1] < 0:  # Jumping up; Hit the bottom side of the wall
+                self.rect.top = tile.rect.bottom
+                self.velocity[1] = 0
 
 
 
@@ -185,7 +150,7 @@ tile4 = Tile((3, 10))
 tile4.add(collide_tiles)
 tile4.add(all_sprites)
 
-tile5 = Tile((4.5, 7))
+tile5 = Tile((5, 4))
 tile5.add(collide_tiles)
 tile5.add(all_sprites)
 
