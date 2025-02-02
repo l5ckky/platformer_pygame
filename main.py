@@ -3,12 +3,13 @@ import pygame
 import os
 # import sys
 
-GROUND_LEVEL = 500
+GROUND_LEVEL = 800
 GRAVITY = 1
-JUMP_V = 20
-WALK_V = 5
-SPRINT_V = 7
-
+JUMP_V = 16
+WALK_V = 6
+SPRINT_V = 8
+V_MAX = 75
+debug_text = []
 
 def load_image(name):
     """ Load image and return image object"""
@@ -45,9 +46,11 @@ class Player(pygame.sprite.Sprite):
         pygame.sprite.Sprite.__init__(self)
         self.image, _ = load_image('player.png')
         self.scale = 5
+
         self.image = pygame.transform.scale(self.image,
                                             [self.image.get_width() * self.scale, self.image.get_height() * self.scale])
         # screen = pygame.display.get_surface()
+        self.src_image = self.image
         self.area = screen.get_rect()
         self.rect = pygame.Rect(pos[0], pos[1], self.image.get_width(), self.image.get_height())
         self.jumping = False
@@ -55,29 +58,31 @@ class Player(pygame.sprite.Sprite):
         self.velocity = [0, 0]
         self.left = False
         self.right = False
+        self.prev_flip = 0
+        self.gr = None
 
     def jump(self):
         if self.onGround:
             if not self.jumping:
                 self.jumping = True
+                self.velocity[1] = -JUMP_V
 
     def update(self):
-        # if self.rect.y + self.rect.height >= GROUND_LEVEL:
-        #     self.onGround = True
-        # else:
-        #     self.onGround = False
+        if self.rect.y >= GROUND_LEVEL:
+            self.onGround = True
+        else:
+            self.onGround = False
 
         self.velocity[0] = 0
         if self.right:
+            self.image = self.src_image
             self.velocity[0] = WALK_V
         if self.left:
+            self.image = pygame.transform.flip(self.src_image, 1, 0)
             self.velocity[0] = -WALK_V
 
-
-
         # gravity
-        print(self.velocity)
-        if self.velocity[1] < 20:
+        if self.velocity[1] < V_MAX:
             self.velocity[1] += GRAVITY
 
         if self.onGround:
@@ -87,49 +92,30 @@ class Player(pygame.sprite.Sprite):
             self.velocity[1] -= JUMP_V
             self.jumping = False
 
-        prev_rect = self.rect
+        self.rect.x += self.velocity[0]
+        self.check_x_collisions()
 
-        self.rect = pygame.Rect(self.rect.x + self.velocity[0], self.rect.y + self.velocity[1], self.rect.width,
-                                self.rect.height)
+        self.rect.y += self.velocity[1]
+        self.check_y_collisions()
 
-        collides = self.check_collides()
-        if collides:
-            for side, obj in collides:
-                # print(side)
-                if side == "top":
-                    self.rect.y = obj.rect.y - self.rect.height + 1
-                    self.onGround = True
-                if side == "left":
-                    self.rect.x = obj.rect.x - obj.rect.width - 1
-                if side == "right":
-                    self.rect.x = obj.rect.x + obj.rect.width - 2
-                # if side == "left":
-                #     self.rect.x = obj.rect.x - self.rect.width
-        else:
-            self.onGround = False
+    def check_x_collisions(self):
+        collisions = pygame.sprite.spritecollide(self, collide_tiles, False)
+        for tile in collisions:
+            if self.velocity[0] > 0:  # Moving right; Hit the left side of the wall
+                self.rect.right = tile.rect.left
+            elif self.velocity[0] < 0:  # Moving left; Hit the right side of the wall
+                self.rect.left = tile.rect.right
 
-
-    def check_collides(self):
-        collides = pygame.sprite.spritecollide(self, collide_tiles, False)
-        r = []
-        for obj in collides:
-            collide_side = None
-            top = obj.rect.y + obj.rect.height * 0.2 > self.rect.y + self.rect.height
-            bottom = obj.rect.centery < self.rect.y
-            left = obj.rect.centerx > self.rect.x + self.rect.width
-            right = obj.rect.centerx < self.rect.x
-            print(top, bottom, left, right)
-            if top and not bottom:
-                collide_side = "top"
-            elif bottom and not top:
-                collide_side = "bottom"
-            if left and not right and not top and not bottom:
-                collide_side = "left"
-            elif right and not left and not top and not bottom:
-                collide_side = "right"
-            print(collide_side)
-            r.append((collide_side, obj))
-        return r
+    def check_y_collisions(self):
+        collisions = pygame.sprite.spritecollide(self, collide_tiles, False)
+        for tile in collisions:
+            if self.velocity[1] > 0:  # Falling down; Hit the top side of the wall
+                self.rect.bottom = tile.rect.top
+                self.onGround = True
+                self.velocity[1] = 0
+            elif self.velocity[1] < 0:  # Jumping up; Hit the bottom side of the wall
+                self.rect.top = tile.rect.bottom
+                self.velocity[1] = 0
 
 
 
@@ -145,21 +131,31 @@ dt = 0
 all_sprites = pygame.sprite.Group()
 collide_tiles = pygame.sprite.Group()
 
-player = Player((315, 100))
+player = Player((518, 100))
 player.add(all_sprites)
 
-tile = Tile((3, 10.4))
+tile = Tile((6, 10))
 tile.add(collide_tiles)
 tile.add(all_sprites)
 
-tile2 = Tile((4.6, 9))
+tile2 = Tile((4.5, 8))
 tile2.add(collide_tiles)
 tile2.add(all_sprites)
 
-tile3 = Tile((9, 9))
+tile3 = Tile((4.5, 9))
 tile3.add(collide_tiles)
 tile3.add(all_sprites)
 
+tile4 = Tile((3, 10))
+tile4.add(collide_tiles)
+tile4.add(all_sprites)
+
+tile5 = Tile((5, 4))
+tile5.add(collide_tiles)
+tile5.add(all_sprites)
+
+
+DEBUG_MODE = False
 
 while running:
     # poll for events
@@ -167,23 +163,19 @@ while running:
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = False
+        if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_F1:
+                DEBUG_MODE = not DEBUG_MODE
 
     # fill the screen with a color to wipe away anything from last frame
     screen.fill("purple")
 
     all_sprites.draw(screen)
-    # pygame.draw.circle(screen, "red", (player.rect.x, player.rect.y), 5)
-    # pygame.draw.circle(screen, "red", (tile.rect.x, tile.rect.y), 5)
-    # pygame.draw.circle(screen, "red", (tile2.rect.x, tile2.rect.y), 5)
-    # pygame.draw.circle(screen, "red", (tile3.rect.x, tile3.rect.y), 5)
-    # pygame.draw.circle(screen, "green", (tile.rect.centerx, tile.rect.centery), 5)
-    # pygame.draw.circle(screen, "green", (tile2.rect.centerx, tile2.rect.centery), 5)
-    # pygame.draw.circle(screen, "green", (tile3.rect.centerx, tile3.rect.centery), 5)
 
     player.right, player.left = False, False
 
     keys = pygame.key.get_pressed()
-    if keys[pygame.K_w]:
+    if keys[pygame.K_w] or keys[pygame.K_SPACE]:
         player.jump()
     if keys[pygame.K_s]:
         # player.crouch()
@@ -195,11 +187,39 @@ while running:
         player.right = True
 
     # flip() the display to put your work on screen
-    pygame.display.flip()
+
 
     player.update()
 
+    if DEBUG_MODE:
+        # pygame.draw.circle(screen, "red", (player.rect.x, player.rect.y), 5)
+        for obj in all_sprites.sprites():
+            pygame.draw.circle(screen, "red", (obj.rect.x, obj.rect.y), 5)
+            pygame.draw.circle(screen, "green", (obj.rect.centerx, obj.rect.centery), 5)
 
+            string_rendered = (pygame.font.Font(None, 20)
+                               .render(f"{obj.rect.x}, {obj.rect.y}", 1, pygame.Color('red')))
+            text_rect = string_rendered.get_rect()
+            text_rect.x = obj.rect.x
+            text_rect.y = obj.rect.y
+            screen.blit(string_rendered, text_rect)
+
+        font = pygame.font.Font(None, 30)
+        text_coord = 50
+        for line in debug_text:
+            string_rendered = font.render(line, 1, pygame.Color('black'))
+            intro_rect = string_rendered.get_rect()
+            text_coord += 5
+            intro_rect.top = text_coord
+            intro_rect.x = 10
+            text_coord += intro_rect.height
+            screen.blit(string_rendered, intro_rect)
+
+        debug_text = [f"VEL {player.velocity[0]} {player.velocity[1]}",
+                      f"POS {player.rect.x} {player.rect.y}",
+                      f"GR {player.onGround}"]
+
+    pygame.display.flip()
     # limits FPS to 60
     # dt is delta time in seconds since last frame, used for framerate-
     # independent physics.
