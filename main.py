@@ -1,8 +1,6 @@
-# Example file showing a circle moving on screen
 import pygame
 import os
 from pytmx.util_pygame import load_pygame
-# import sys
 
 GROUND_LEVEL = 800
 GRAVITY = 1
@@ -11,7 +9,7 @@ WALK_V = 6
 SPRINT_V = 10
 V_MAX = 100
 debug_text = []
-SCALE = 3
+
 
 def load_image(name):
     """ Load image and return image object"""
@@ -27,17 +25,22 @@ def load_image(name):
         raise SystemExit
     return image, image.get_rect()
 
+
 def gen_level(name):
     level = load_pygame(name)
+    SCALE = player.rect.height // 2
     for layer in level.visible_layers:
         for x, y, gid in layer:
             image_tile = level.get_tile_image_by_gid(gid)
             if image_tile:
                 width = image_tile.get_width()
-                image_tile = pygame.transform.scale(image_tile, [image_tile.get_width() * SCALE, image_tile.get_height() * SCALE])
-                tile = Tile(image_tile, (x*width*SCALE, y*width*SCALE))
-                tile.add(collide_tiles)
+                image_tile = pygame.transform.scale(image_tile, [SCALE, SCALE])
+                tile = Tile(image_tile, (x * SCALE, y * SCALE))
+                if layer.name == "collide":
+                    tile.add(collide_tiles)
                 tile.add(all_sprites)
+    return level
+
 
 class Tile(pygame.sprite.Sprite):
     def __init__(self, image, position):
@@ -54,7 +57,7 @@ class Player(pygame.sprite.Sprite):
     def __init__(self, pos):
         pygame.sprite.Sprite.__init__(self)
         self.image, _ = load_image('player.png')
-        self.scale = 4
+        self.scale = 2
 
         self.image = pygame.transform.scale(self.image,
                                             [self.image.get_width() * self.scale, self.image.get_height() * self.scale])
@@ -132,40 +135,21 @@ class Player(pygame.sprite.Sprite):
                 self.velocity[1] = 0
 
 
-# pygame setup
 pygame.init()
-screen = pygame.display.set_mode((1920, 1080))
+screen = pygame.display.set_mode((2560, 1440), pygame.FULLSCREEN)
 clock = pygame.time.Clock()
 running = True
 dt = 0
 
 all_sprites = pygame.sprite.Group()
+player_group = pygame.sprite.Group()
 collide_tiles = pygame.sprite.Group()
 
 player = Player((518, 0))
 player.add(all_sprites)
+player.add(player_group)
 
-gen_level("test_level.tmx")
-
-# tile = Tile((6, 10))
-# tile.add(collide_tiles)
-# tile.add(all_sprites)
-#
-# tile2 = Tile((4.5, 8))
-# tile2.add(collide_tiles)
-# tile2.add(all_sprites)
-#
-# tile3 = Tile((4.5, 9))
-# tile3.add(collide_tiles)
-# tile3.add(all_sprites)
-#
-# tile4 = Tile((3, 10))
-# tile4.add(collide_tiles)
-# tile4.add(all_sprites)
-#
-# tile5 = Tile((5, 4))
-# tile5.add(collide_tiles)
-# tile5.add(all_sprites)
+level = gen_level("levels/test_level.tmx")
 
 DEBUG_MODE = False
 
@@ -178,11 +162,14 @@ while running:
         if event.type == pygame.KEYDOWN:
             if event.key == pygame.K_F1:
                 DEBUG_MODE = not DEBUG_MODE
+            if event.key == pygame.K_ESCAPE:
+                running = False
 
     # fill the screen with a color to wipe away anything from last frame
     screen.fill("purple")
 
     all_sprites.draw(screen)
+    player_group.draw(screen)
 
     player.right, player.left, player.sprint = False, False, False
 
