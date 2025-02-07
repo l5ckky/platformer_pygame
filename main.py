@@ -5,8 +5,8 @@ from pytmx.util_pygame import load_pygame
 GROUND_LEVEL = 800
 GRAVITY = 1
 JUMP_V = 13
-WALK_V = 6
-SPRINT_V = 10
+WALK_V = 8
+SPRINT_V = 12
 V_MAX = 100
 debug_text = []
 
@@ -39,7 +39,7 @@ def gen_level(name):
                 if layer.name == "collide":
                     tile.add(collide_tiles)
                 tile.add(all_sprites)
-    return level
+    return level, SCALE
 
 
 class Tile(pygame.sprite.Sprite):
@@ -49,15 +49,15 @@ class Tile(pygame.sprite.Sprite):
         self.area = screen.get_rect()
         self.rect = pygame.Rect(position[0], position[1], self.image.get_width(), self.image.get_height())
 
-    def update(self):
-        pass
+    def draw(self, screen, camera):
+        screen.blit(self.image, self.rect.move(camera))
 
 
 class Player(pygame.sprite.Sprite):
     def __init__(self, pos):
         pygame.sprite.Sprite.__init__(self)
         self.image, _ = load_image('player.png')
-        self.scale = 2
+        self.scale = 5
 
         self.image = pygame.transform.scale(self.image,
                                             [self.image.get_width() * self.scale, self.image.get_height() * self.scale])
@@ -135,6 +135,22 @@ class Player(pygame.sprite.Sprite):
                 self.velocity[1] = 0
 
 
+class Camera:
+    # зададим начальный сдвиг камеры
+    def __init__(self):
+        self.dx = 0
+        self.dy = 0
+
+    # сдвинуть объект obj на смещение камеры
+    def apply(self, obj):
+        obj.rect.x += self.dx
+        obj.rect.y += self.dy
+
+    # позиционировать камеру на объекте target
+    def update(self, target):
+        self.dx = -(target.rect.centerx - screen.get_width() // 2)
+        self.dy = -(target.rect.centery - screen.get_height() // 2)
+
 pygame.init()
 screen = pygame.display.set_mode((2560, 1440), pygame.FULLSCREEN)
 clock = pygame.time.Clock()
@@ -149,7 +165,9 @@ player = Player((518, 0))
 player.add(all_sprites)
 player.add(player_group)
 
-level = gen_level("levels/test_level.tmx")
+level, level_scale = gen_level("levels/test_level.tmx")
+# print(level.width*level_scale)
+camera = Camera()
 
 DEBUG_MODE = False
 
@@ -188,6 +206,12 @@ while running:
     # flip() the display to put your work on screen
 
     player.update()
+
+    # изменяем ракурс камеры
+    camera.update(player)
+    # обновляем положение всех спрайтов
+    for sprite in all_sprites:
+        camera.apply(sprite)
 
     if DEBUG_MODE:
         # pygame.draw.circle(screen, "red", (player.rect.x, player.rect.y), 5)
