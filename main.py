@@ -135,21 +135,145 @@ class Player(pygame.sprite.Sprite):
                 self.velocity[1] = 0
 
 
-class Camera:
-    # зададим начальный сдвиг камеры
+class CameraGroup(pygame.sprite.Group):
     def __init__(self):
-        self.dx = 0
-        self.dy = 0
+        super().__init__()
+        self.display_surface = pygame.display.get_surface()
 
-    # сдвинуть объект obj на смещение камеры
-    def apply(self, obj):
-        obj.rect.x += self.dx
-        obj.rect.y += self.dy
+        # camera offset
+        self.offset = pygame.math.Vector2()
+        self.half_w = self.display_surface.get_size()[0] // 2
+        self.half_h = self.display_surface.get_size()[1] // 2
 
-    # позиционировать камеру на объекте target
-    def update(self, target):
-        self.dx = -(target.rect.centerx - screen.get_width() // 2)
-        self.dy = -(target.rect.centery - screen.get_height() // 2)
+        # box setup
+        self.camera_borders = {'left': screen.get_width()*0.4,
+                               'right': screen.get_width()*0.4,
+                               'top': screen.get_height()*0.2,
+                               'bottom': screen.get_height()*0.3}
+        l = self.camera_borders['left']
+        t = self.camera_borders['top']
+        w = self.display_surface.get_size()[0] - (self.camera_borders['left'] + self.camera_borders['right'])
+        h = self.display_surface.get_size()[1] - (self.camera_borders['top'] + self.camera_borders['bottom'])
+        self.camera_rect = pygame.Rect(l, t, w, h)
+
+        # ground
+        self.ground_surf = load_image("bg.jpg")[0]
+        self.ground_rect = self.ground_surf.get_rect(topleft=(0, 0))
+
+        # camera speed
+        self.keyboard_speed = 5
+        self.mouse_speed = 0.2
+
+        # zoom
+        self.zoom_scale = 1
+        self.internal_surf_size = (2500, 2500)
+        self.internal_surf = pygame.Surface(self.internal_surf_size, pygame.SRCALPHA)
+        self.internal_rect = self.internal_surf.get_rect(center=(self.half_w, self.half_h))
+        self.internal_surface_size_vector = pygame.math.Vector2(self.internal_surf_size)
+        self.internal_offset = pygame.math.Vector2()
+        self.internal_offset.x = self.internal_surf_size[0] // 2 - self.half_w
+        self.internal_offset.y = self.internal_surf_size[1] // 2 - self.half_h
+
+    def center_target_camera(self, target):
+        self.offset.x = target.rect.centerx - self.half_w
+        self.offset.y = target.rect.centery - self.half_h
+
+    def box_target_camera(self, target):
+
+        if target.rect.left < self.camera_rect.left:
+            self.camera_rect.left = target.rect.left
+        if target.rect.right > self.camera_rect.right:
+            self.camera_rect.right = target.rect.right
+        if target.rect.top < self.camera_rect.top:
+            self.camera_rect.top = target.rect.top
+        if target.rect.bottom > self.camera_rect.bottom:
+            self.camera_rect.bottom = target.rect.bottom
+
+        self.offset.x = self.camera_rect.left - self.camera_borders['left']
+        self.offset.y = self.camera_rect.top - self.camera_borders['top']
+    #
+    # def keyboard_control(self):
+    #     keys = pygame.key.get_pressed()
+    #     if keys[pygame.K_a]: self.camera_rect.x -= self.keyboard_speed
+    #     if keys[pygame.K_d]: self.camera_rect.x += self.keyboard_speed
+    #     if keys[pygame.K_w]: self.camera_rect.y -= self.keyboard_speed
+    #     if keys[pygame.K_s]: self.camera_rect.y += self.keyboard_speed
+    #
+    #     self.offset.x = self.camera_rect.left - self.camera_borders['left']
+    #     self.offset.y = self.camera_rect.top - self.camera_borders['top']
+    #
+    # def mouse_control(self):
+    #     mouse = pygame.math.Vector2(pygame.mouse.get_pos())
+    #     mouse_offset_vector = pygame.math.Vector2()
+    #
+    #     left_border = self.camera_borders['left']
+    #     top_border = self.camera_borders['top']
+    #     right_border = self.display_surface.get_size()[0] - self.camera_borders['right']
+    #     bottom_border = self.display_surface.get_size()[1] - self.camera_borders['bottom']
+    #
+    #     if top_border < mouse.y < bottom_border:
+    #         if mouse.x < left_border:
+    #             mouse_offset_vector.x = mouse.x - left_border
+    #             pygame.mouse.set_pos((left_border, mouse.y))
+    #         if mouse.x > right_border:
+    #             mouse_offset_vector.x = mouse.x - right_border
+    #             pygame.mouse.set_pos((right_border, mouse.y))
+    #     elif mouse.y < top_border:
+    #         if mouse.x < left_border:
+    #             mouse_offset_vector = mouse - pygame.math.Vector2(left_border, top_border)
+    #             pygame.mouse.set_pos((left_border, top_border))
+    #         if mouse.x > right_border:
+    #             mouse_offset_vector = mouse - pygame.math.Vector2(right_border, top_border)
+    #             pygame.mouse.set_pos((right_border, top_border))
+    #     elif mouse.y > bottom_border:
+    #         if mouse.x < left_border:
+    #             mouse_offset_vector = mouse - pygame.math.Vector2(left_border, bottom_border)
+    #             pygame.mouse.set_pos((left_border, bottom_border))
+    #         if mouse.x > right_border:
+    #             mouse_offset_vector = mouse - pygame.math.Vector2(right_border, bottom_border)
+    #             pygame.mouse.set_pos((right_border, bottom_border))
+    #
+    #     if left_border < mouse.x < right_border:
+    #         if mouse.y < top_border:
+    #             mouse_offset_vector.y = mouse.y - top_border
+    #             pygame.mouse.set_pos((mouse.x, top_border))
+    #         if mouse.y > bottom_border:
+    #             mouse_offset_vector.y = mouse.y - bottom_border
+    #             pygame.mouse.set_pos((mouse.x, bottom_border))
+    #
+    #     self.offset += mouse_offset_vector * self.mouse_speed
+    #
+    # def zoom_keyboard_control(self):
+    #     keys = pygame.key.get_pressed()
+    #     if keys[pygame.K_q]:
+    #         self.zoom_scale += 0.1
+    #     if keys[pygame.K_e]:
+    #         self.zoom_scale -= 0.1
+
+    def custom_draw(self, player):
+
+        # self.center_target_camera(player)
+        self.box_target_camera(player)
+        # self.keyboard_control()
+        # self.mouse_control()
+        # self.zoom_keyboard_control()
+
+        self.internal_surf.fill('#71ddee')
+
+        # ground
+        ground_offset = self.ground_rect.topleft - self.offset + self.internal_offset
+        self.internal_surf.blit(self.ground_surf, ground_offset)
+
+        # active elements
+        for sprite in self.sprites():
+            offset_pos = sprite.rect.topleft - self.offset + self.internal_offset
+            self.internal_surf.blit(sprite.image, offset_pos)
+
+        # scaled_surf = pygame.transform.scale(self.internal_surf, self.internal_surface_size_vector * self.zoom_scale)
+        scaled_rect = self.internal_surf.get_rect(center=(self.half_w, self.half_h))
+
+        self.display_surface.blit(self.internal_surf, scaled_rect)
+
 
 pygame.init()
 screen = pygame.display.set_mode((2560, 1440), pygame.FULLSCREEN)
@@ -157,17 +281,16 @@ clock = pygame.time.Clock()
 running = True
 dt = 0
 
-all_sprites = pygame.sprite.Group()
+all_sprites = CameraGroup()
 player_group = pygame.sprite.Group()
 collide_tiles = pygame.sprite.Group()
 
 player = Player((518, 0))
-player.add(all_sprites)
+
 player.add(player_group)
 
 level, level_scale = gen_level("levels/test_level.tmx")
-# print(level.width*level_scale)
-camera = Camera()
+player.add(all_sprites)
 
 DEBUG_MODE = False
 
@@ -186,8 +309,8 @@ while running:
     # fill the screen with a color to wipe away anything from last frame
     screen.fill("purple")
 
-    all_sprites.draw(screen)
-    player_group.draw(screen)
+    all_sprites.update()
+    all_sprites.custom_draw(player)
 
     player.right, player.left, player.sprint = False, False, False
 
@@ -205,26 +328,26 @@ while running:
 
     # flip() the display to put your work on screen
 
-    player.update()
+    # player.update()
 
-    # изменяем ракурс камеры
-    camera.update(player)
-    # обновляем положение всех спрайтов
-    for sprite in all_sprites:
-        camera.apply(sprite)
+    # # изменяем ракурс камеры
+    # camera.update(player)
+    # # обновляем положение всех спрайтов
+    # for sprite in all_sprites:
+    #     camera.apply(sprite)
 
     if DEBUG_MODE:
         # pygame.draw.circle(screen, "red", (player.rect.x, player.rect.y), 5)
-        for obj in all_sprites.sprites():
-            pygame.draw.circle(screen, "red", (obj.rect.x, obj.rect.y), 5)
-            pygame.draw.circle(screen, "green", (obj.rect.centerx, obj.rect.centery), 5)
-
-            string_rendered = (pygame.font.Font(None, 20)
-                               .render(f"{obj.rect.x}, {obj.rect.y}", 1, pygame.Color('red')))
-            text_rect = string_rendered.get_rect()
-            text_rect.x = obj.rect.x
-            text_rect.y = obj.rect.y
-            screen.blit(string_rendered, text_rect)
+        # for obj in all_sprites.sprites():
+        #     pygame.draw.circle(screen, "red", (obj.rect.x, obj.rect.y), 5)
+        #     pygame.draw.circle(screen, "green", (obj.rect.centerx, obj.rect.centery), 5)
+        #
+        #     string_rendered = (pygame.font.Font(None, 20)
+        #                        .render(f"{obj.rect.x}, {obj.rect.y}", 1, pygame.Color('red')))
+        #     text_rect = string_rendered.get_rect()
+        #     text_rect.x = obj.rect.x
+        #     text_rect.y = obj.rect.y
+        #     screen.blit(string_rendered, text_rect)
 
         font = pygame.font.Font(None, 30)
         text_coord = 50
