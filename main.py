@@ -1,6 +1,9 @@
 import pygame
 import os
+
+import pytmx.pytmx
 from pytmx.util_pygame import load_pygame
+
 SCALE = 5
 GROUND_LEVEL = 800
 GRAVITY = 1
@@ -12,7 +15,9 @@ debug_text = []
 
 
 def load_image(name):
-    """ Load image and return image object"""
+    """Загружает изображение
+
+    Возвращает кортеж с изображением и прямоугольником"""
     fullname = os.path.join("data", name)
     try:
         image = pygame.image.load(fullname)
@@ -27,113 +32,135 @@ def load_image(name):
 
 
 def gen_level(name):
-    level = load_pygame(name)
-    SCALE = player.rect.height // 2
+    """Создаёт экземпляры класса Tile
+
+        Возвращает кортеж с загруженным уровнем и размером тайла в пикселях """
+    level = load_pygame(name)  # получаем уровень
+    scale = player.rect.height // 2  # высота(ширина) тайла - пол высоты игрока
+    # tile_width = level.tilewidth  # сколько пикселей тайл в ширину(высоту)
     for layer in level.visible_layers:
-        for x, y, gid in layer:
-            image_tile = level.get_tile_image_by_gid(gid)
-            if image_tile:
-                width = image_tile.get_width()
-                image_tile = pygame.transform.scale(image_tile, [SCALE, SCALE])
-                tile = Tile(image_tile, (x * SCALE, y * SCALE))
-                if layer.name == "collide":
-                    tile.add(collide_tiles)
-                tile.add(all_sprites)
-    return level, SCALE
+        if isinstance(layer, pytmx.pytmx.TiledTileLayer):
+            for x, y, gid in layer:
+                image_tile = level.get_tile_image_by_gid(gid)
+                if image_tile:
+                    image_tile = pygame.transform.scale(image_tile, [scale, scale])
+                    tile = Tile(image_tile, (x * scale, y * scale))
+                    if layer.name == "collide":
+                        tile.add(collide_tiles)
+                    tile.add(all_sprites)
+    for obj in level.objects:
+        print(obj.x, obj.y)
+        if obj.visible:
+            if obj.type == "Player" and obj.name == "Spawn":
+                player.rect.x = obj.x * SCALE
+                player.rect.y = obj.y * SCALE
+    return level, scale
 
 
 class Tile(pygame.sprite.Sprite):
+    """Объект Тайла
+
+    image - текстура тайла
+
+    position - кортеж с координатами в пикселях (x, y)"""
+
     def __init__(self, image, position):
         pygame.sprite.Sprite.__init__(self)
-        self.image = image
-        self.area = screen.get_rect()
+        self.image = image  # уставливается текстура
+        # self.area = screen.get_rect()  # ?
         self.rect = pygame.Rect(position[0], position[1], self.image.get_width(), self.image.get_height())
 
 
 class Player(pygame.sprite.Sprite):
+    """Объект Игрока
+
+        pos - кортеж с координатами в пикселях (x, y)"""
+
     def __init__(self, pos):
         pygame.sprite.Sprite.__init__(self)
         self.image, _ = load_image('player.png')
-        self.scale = screen.get_height() / 1152
-        self.scale_image = SCALE * self.scale
+        self.scale = screen.get_height() / 1152  # получаем коэфицент адаптации
+        self.scale_image = SCALE * self.scale  # домножаем масштаб на него
 
+        # масштабируем маленькую текстуру
         self.image = pygame.transform.scale(self.image,
-                                            [self.image.get_width() * self.scale_image, self.image.get_height() * self.scale_image])
-        # screen = pygame.display.get_surface()
-        self.src_image = self.image
-        self.area = screen.get_rect()
-        self.rect = pygame.Rect(pos[0], pos[1], self.image.get_height()//2, self.image.get_height())
-        self.jumping = False
-        self.onGround = False
-        self.velocity = [0, 0]
-        self.left = False
-        self.right = False
-        self.sprint = False
-        self.gr = None
+                                            [self.image.get_width() * self.scale_image,
+                                             self.image.get_height() * self.scale_image])
+
+        self.src_image = self.image  # запоминаем как было
+        # ширина - пол высоты
+        self.rect = pygame.Rect(pos[0], pos[1], self.image.get_height() // 2, self.image.get_height())
+        self.jumping = False  # прыжок
+        self.onGround = False  # тег "на земле"
+        self.velocity = [0, 0]  # вектор скорости
+        self.left = False  # идём влево
+        self.right = False  # идём вправо
+        self.sprint = False  # бежим
+        # self.gr = None
 
     def jump(self):
-        if self.onGround:
-            if not self.jumping:
-                self.jumping = True
-                self.velocity[1] = -JUMP_V*self.scale
+        if self.onGround:   # если на земле
+            if not self.jumping:  # если ещё не прыгнули
+                self.jumping = True  # прыгаем
+                self.velocity[1] = -JUMP_V * self.scale  # ускоряемся (с адаптацией, далее - тоже)
 
     def update(self):
-        # if self.rect.y >= GROUND_LEVEL:
-        #     self.onGround = True
-        # else:
-        #     self.onGround = False
-        self.onGround = False
-        self.velocity[0] = 0
+        self.onGround = False  # сбрасывает тег "на земле"
+        self.velocity[0] = 0  # сбрасываем скорость
         if self.right:
-            self.image = self.src_image
-            self.velocity[0] = SPRINT_V*self.scale if self.sprint else WALK_V*self.scale
+            self.image = self.src_image  # согласны, узнали?
+            # ой тут короче лень было многострочные условия делать
+            self.velocity[0] = SPRINT_V * self.scale if self.sprint else WALK_V * self.scale
         if self.left:
-            self.image = pygame.transform.flip(self.src_image, 1, 0)
-            self.velocity[0] = -SPRINT_V*self.scale if self.sprint else -WALK_V*self.scale
+            self.image = pygame.transform.flip(self.src_image, 1, 0)  # разворачиваемся и уходим
+            # если бежим, то скорость соответвующая; если идём, идём размеренным шагом
+            self.velocity[0] = -SPRINT_V * self.scale if self.sprint else -WALK_V * self.scale
 
-        # gravity
-        if self.velocity[1] < V_MAX*self.scale:
-            self.velocity[1] += GRAVITY*self.scale
+        # применяем гравитацию
+        if self.velocity[1] < V_MAX * self.scale:
+            self.velocity[1] += GRAVITY * self.scale
 
-        #
+        # если на земле, никуда не дёргаемся
         if self.onGround:
             self.velocity[1] = 0
 
+        # если прыгаем, даём ускорение
         if self.jumping:
-            self.velocity[1] -= JUMP_V*self.scale
-            self.jumping = False
+            self.velocity[1] -= JUMP_V * self.scale
+            self.jumping = False  # не прыгаем уже!
 
-        self.rect.x += self.velocity[0]
-        self.check_x_collisions()
+        self.rect.x += self.velocity[0]  # применяем вектор скорости к х оси
+        self.check_x_collisions()  # проверяем коллизии
 
-        self.rect.y += self.velocity[1]
-        self.check_y_collisions()
+        self.rect.y += self.velocity[1]  # применяем вектор скорости к у оси
+        self.check_y_collisions()  # проверяем столкновения
 
     def check_x_collisions(self):
         collisions = pygame.sprite.spritecollide(self, collide_tiles, False)
 
-        for tile in collisions:
-            if self.velocity[0] > 0:
-                self.rect.right = tile.rect.left
-                self.velocity[0] = 0
-            elif self.velocity[0] < 0:
-                self.rect.left = tile.rect.right
-                self.velocity[0] = 0
+        for tile in collisions:  # для каждого тайла, с которым можно сталкиваться
+            if self.velocity[0] > 0:  # если направляемся вправо
+                self.rect.right = tile.rect.left  # спотыкаемся
+                self.velocity[0] = 0  # лежим
+            elif self.velocity[0] < 0:  # если направляемся вправо
+                self.rect.left = tile.rect.right  # спотыкаемся
+                self.velocity[0] = 0  # лежим
 
     def check_y_collisions(self):
         collisions = pygame.sprite.spritecollide(self, collide_tiles, False)
 
-        for tile in collisions:
-            if self.velocity[1] > 0:
-                self.rect.bottom = tile.rect.top
-                self.onGround = True
-                self.velocity[1] = 0
-            elif self.velocity[1] < 0:
-                self.rect.top = tile.rect.bottom
-                self.velocity[1] = 0
+        for tile in collisions:  # для каждого тайла, с которым можно сталкиваться
+            if self.velocity[1] > 0:  # если летим вниз
+                self.rect.bottom = tile.rect.top  # ударёмся ногой
+                self.onGround = True  # упали на землю
+                self.velocity[1] = 0  # лежим
+            elif self.velocity[1] < 0:  # если прягаем вверх
+                self.rect.top = tile.rect.bottom  # ударёмся головой
+                self.velocity[1] = 0  # не мотаем головой лишний раз
 
 
 class CameraGroup(pygame.sprite.Group):
+    # спасибо Clear Code (YouTube) (иносказитель)
     def __init__(self):
         super().__init__()
         self.display_surface = pygame.display.get_surface()
@@ -145,10 +172,10 @@ class CameraGroup(pygame.sprite.Group):
         self.half_h = self.display_surface.get_size()[1] // 2
 
         # box setup
-        self.camera_borders = {'left': screen.get_width()*0.4,
-                               'right': screen.get_width()*0.4,
-                               'top': screen.get_height()*0.2,
-                               'bottom': screen.get_height()*0.3}
+        self.camera_borders = {'left': screen.get_width() * 0.4,
+                               'right': screen.get_width() * 0.4,
+                               'top': screen.get_height() * 0.2,
+                               'bottom': screen.get_height() * 0.3}
         l = self.camera_borders['left']
         t = self.camera_borders['top']
         w = self.display_surface.get_size()[0] - (self.camera_borders['left'] + self.camera_borders['right'])
@@ -200,7 +227,7 @@ class CameraGroup(pygame.sprite.Group):
         # self.mouse_control()
         # self.zoom_keyboard_control()
 
-        self.internal_surf.fill('#71ddee')
+        self.internal_surf.fill('#71ddee')  # льём небо
 
         # ground
         ground_offset = self.ground_rect.topleft - self.offset + self.internal_offset
@@ -217,23 +244,30 @@ class CameraGroup(pygame.sprite.Group):
         self.display_surface.blit(self.internal_surf, scaled_rect)
 
 
-pygame.init()
-screen = pygame.display.set_mode((0, 0), flags=pygame.FULLSCREEN)
-print(screen.get_size())
-clock = pygame.time.Clock()
-running = True
-dt = 0
+pygame.init()  # да
+screen = pygame.display.set_mode((0, 0), flags=pygame.FULLSCREEN)  # на весь экран, размер окна - автоматически
 
-all_sprites = CameraGroup()
-player_group = pygame.sprite.Group()
-collide_tiles = pygame.sprite.Group()
+# лирическое отступление: Если в windows в параметрах экрана установлен масштаб, отличный от 100 процентов, то
+# разрешение определяется с учётом этого масштаба, причём в меньшую сторону. Если масштаб 100, то разрешение
+# определяется сразу и игра запускается сразу, без кат-сцен ввиде мигающего черного экрана. Читы на пропуск кат-сцены
+# В общем игра отображется везде одинаково, так что и ладно.
 
-player = Player((518, 0))
+# print(screen.get_size())  # пытаемся понять, почему не все одинаковые
+clock = pygame.time.Clock()  # часы
+running = True  # куда бежим
+dt = 0  # что это воще
 
-player.add(player_group)
+# определёем группы спрайтов
+all_sprites = CameraGroup()  # группа всех спрайтов, что движимы камерой
+player_group = pygame.sprite.Group()  # группа игрока, ладно
+collide_tiles = pygame.sprite.Group()  # группа всех спрайтов, что божьей силой не дают провалиться сквозь них
 
-level, level_scale = gen_level("levels/test_level.tmx")
-player.add(all_sprites)
+player = Player((0, 0))  # первое зарождение игрока, и да, когда-то давно, он жил на (0,0), и что?
+player.add(player_group)  # инвайтим в группу
+
+level, level_scale = gen_level("levels/test_level.tmx")  # да, сначала появился игрок, потом весь мир, и что?
+
+player.add(all_sprites)  # он такое же существо, как и все эти... камни?
 
 DEBUG_MODE = False
 
@@ -246,39 +280,29 @@ while running:
         if event.type == pygame.KEYDOWN:
             if event.key == pygame.K_F1:
                 DEBUG_MODE = not DEBUG_MODE
-            if event.key == pygame.K_ESCAPE:
-                running = False
+            if event.key == pygame.K_ESCAPE:  # кнопка выхода
+                running = False  # не бежим
 
-    # fill the screen with a color to wipe away anything from last frame
-    screen.fill("purple")
+    # screen.fill("purple")  # льём затекстурье. эм... а зачем?...
 
     all_sprites.update()
-    all_sprites.custom_draw(player)
+    all_sprites.custom_draw(player)  # кастомно применяем алгоритмы камеры
 
-    player.right, player.left, player.sprint = False, False, False
+    player.right, player.left, player.sprint = False, False, False  # сбрасываем
 
-    keys = pygame.key.get_pressed()
-    if keys[pygame.K_w] or keys[pygame.K_SPACE]:  # jump
-        player.jump()
-    if keys[pygame.K_s]:  # crouch
+    keys = pygame.key.get_pressed()  # какие кнопочки классные!!! (получаем список нажатых кнопок)
+    if keys[pygame.K_w] or keys[pygame.K_SPACE]:  # Ц или Пробел
+        player.jump()   # прыжок
+    if keys[pygame.K_s]:  # присед
         pass
-    if keys[pygame.K_a]:  # left
+    if keys[pygame.K_a]:  # влево идти
         player.left = True
-    if keys[pygame.K_d]:  # right
+    if keys[pygame.K_d]:  # вправо идти
         player.right = True
-    if keys[pygame.K_LSHIFT]:
+    if keys[pygame.K_LSHIFT]:  # бежать
         player.sprint = True
 
-    # flip() the display to put your work on screen
-
-    # player.update()
-
-    # # изменяем ракурс камеры
-    # camera.update(player)
-    # # обновляем положение всех спрайтов
-    # for sprite in all_sprites:
-    #     camera.apply(sprite)
-
+    # дежукер (отладочный режим)
     if DEBUG_MODE:
         # pygame.draw.circle(screen, "red", (player.rect.x, player.rect.y), 5)
         # for obj in all_sprites.sprites():
@@ -308,10 +332,11 @@ while running:
                       f"GR {player.onGround}",
                       f"SPRINT {player.sprint}"]
 
-    pygame.display.flip()
+    pygame.display.flip()  # обновляем кадр
+
     # limits FPS to 60
     # dt is delta time in seconds since last frame, used for framerate-
     # independent physics.
-    dt = clock.tick(60) / 1000
+    dt = clock.tick(60) / 1000  # считаем кадры
 
-pygame.quit()
+pygame.quit()  # выйдите
