@@ -1,7 +1,7 @@
 import pygame
 import os
 from pytmx.util_pygame import load_pygame
-
+SCALE = 5
 GROUND_LEVEL = 800
 GRAVITY = 1
 JUMP_V = 13
@@ -49,22 +49,20 @@ class Tile(pygame.sprite.Sprite):
         self.area = screen.get_rect()
         self.rect = pygame.Rect(position[0], position[1], self.image.get_width(), self.image.get_height())
 
-    def draw(self, screen, camera):
-        screen.blit(self.image, self.rect.move(camera))
-
 
 class Player(pygame.sprite.Sprite):
     def __init__(self, pos):
         pygame.sprite.Sprite.__init__(self)
         self.image, _ = load_image('player.png')
-        self.scale = 5
+        self.scale = screen.get_height() / 1152
+        self.scale_image = SCALE * self.scale
 
         self.image = pygame.transform.scale(self.image,
-                                            [self.image.get_width() * self.scale, self.image.get_height() * self.scale])
+                                            [self.image.get_width() * self.scale_image, self.image.get_height() * self.scale_image])
         # screen = pygame.display.get_surface()
         self.src_image = self.image
         self.area = screen.get_rect()
-        self.rect = pygame.Rect(pos[0], pos[1], self.image.get_width(), self.image.get_height())
+        self.rect = pygame.Rect(pos[0], pos[1], self.image.get_height()//2, self.image.get_height())
         self.jumping = False
         self.onGround = False
         self.velocity = [0, 0]
@@ -77,7 +75,7 @@ class Player(pygame.sprite.Sprite):
         if self.onGround:
             if not self.jumping:
                 self.jumping = True
-                self.velocity[1] = -JUMP_V
+                self.velocity[1] = -JUMP_V*self.scale
 
     def update(self):
         # if self.rect.y >= GROUND_LEVEL:
@@ -88,21 +86,21 @@ class Player(pygame.sprite.Sprite):
         self.velocity[0] = 0
         if self.right:
             self.image = self.src_image
-            self.velocity[0] = SPRINT_V if self.sprint else WALK_V
+            self.velocity[0] = SPRINT_V*self.scale if self.sprint else WALK_V*self.scale
         if self.left:
             self.image = pygame.transform.flip(self.src_image, 1, 0)
-            self.velocity[0] = -SPRINT_V if self.sprint else -WALK_V
+            self.velocity[0] = -SPRINT_V*self.scale if self.sprint else -WALK_V*self.scale
 
         # gravity
-        if self.velocity[1] < V_MAX:
-            self.velocity[1] += GRAVITY
+        if self.velocity[1] < V_MAX*self.scale:
+            self.velocity[1] += GRAVITY*self.scale
 
         #
         if self.onGround:
             self.velocity[1] = 0
 
         if self.jumping:
-            self.velocity[1] -= JUMP_V
+            self.velocity[1] -= JUMP_V*self.scale
             self.jumping = False
 
         self.rect.x += self.velocity[0]
@@ -139,6 +137,7 @@ class CameraGroup(pygame.sprite.Group):
     def __init__(self):
         super().__init__()
         self.display_surface = pygame.display.get_surface()
+        # print(screen.get_width())
 
         # camera offset
         self.offset = pygame.math.Vector2()
@@ -168,6 +167,7 @@ class CameraGroup(pygame.sprite.Group):
         self.zoom_scale = 1
         self.internal_surf_size = (2500, 2500)
         self.internal_surf = pygame.Surface(self.internal_surf_size, pygame.SRCALPHA)
+        # self.internal_surf = pygame.transform.scale(self.internal_surf, screen.get_size())
         self.internal_rect = self.internal_surf.get_rect(center=(self.half_w, self.half_h))
         self.internal_surface_size_vector = pygame.math.Vector2(self.internal_surf_size)
         self.internal_offset = pygame.math.Vector2()
@@ -191,64 +191,6 @@ class CameraGroup(pygame.sprite.Group):
 
         self.offset.x = self.camera_rect.left - self.camera_borders['left']
         self.offset.y = self.camera_rect.top - self.camera_borders['top']
-    #
-    # def keyboard_control(self):
-    #     keys = pygame.key.get_pressed()
-    #     if keys[pygame.K_a]: self.camera_rect.x -= self.keyboard_speed
-    #     if keys[pygame.K_d]: self.camera_rect.x += self.keyboard_speed
-    #     if keys[pygame.K_w]: self.camera_rect.y -= self.keyboard_speed
-    #     if keys[pygame.K_s]: self.camera_rect.y += self.keyboard_speed
-    #
-    #     self.offset.x = self.camera_rect.left - self.camera_borders['left']
-    #     self.offset.y = self.camera_rect.top - self.camera_borders['top']
-    #
-    # def mouse_control(self):
-    #     mouse = pygame.math.Vector2(pygame.mouse.get_pos())
-    #     mouse_offset_vector = pygame.math.Vector2()
-    #
-    #     left_border = self.camera_borders['left']
-    #     top_border = self.camera_borders['top']
-    #     right_border = self.display_surface.get_size()[0] - self.camera_borders['right']
-    #     bottom_border = self.display_surface.get_size()[1] - self.camera_borders['bottom']
-    #
-    #     if top_border < mouse.y < bottom_border:
-    #         if mouse.x < left_border:
-    #             mouse_offset_vector.x = mouse.x - left_border
-    #             pygame.mouse.set_pos((left_border, mouse.y))
-    #         if mouse.x > right_border:
-    #             mouse_offset_vector.x = mouse.x - right_border
-    #             pygame.mouse.set_pos((right_border, mouse.y))
-    #     elif mouse.y < top_border:
-    #         if mouse.x < left_border:
-    #             mouse_offset_vector = mouse - pygame.math.Vector2(left_border, top_border)
-    #             pygame.mouse.set_pos((left_border, top_border))
-    #         if mouse.x > right_border:
-    #             mouse_offset_vector = mouse - pygame.math.Vector2(right_border, top_border)
-    #             pygame.mouse.set_pos((right_border, top_border))
-    #     elif mouse.y > bottom_border:
-    #         if mouse.x < left_border:
-    #             mouse_offset_vector = mouse - pygame.math.Vector2(left_border, bottom_border)
-    #             pygame.mouse.set_pos((left_border, bottom_border))
-    #         if mouse.x > right_border:
-    #             mouse_offset_vector = mouse - pygame.math.Vector2(right_border, bottom_border)
-    #             pygame.mouse.set_pos((right_border, bottom_border))
-    #
-    #     if left_border < mouse.x < right_border:
-    #         if mouse.y < top_border:
-    #             mouse_offset_vector.y = mouse.y - top_border
-    #             pygame.mouse.set_pos((mouse.x, top_border))
-    #         if mouse.y > bottom_border:
-    #             mouse_offset_vector.y = mouse.y - bottom_border
-    #             pygame.mouse.set_pos((mouse.x, bottom_border))
-    #
-    #     self.offset += mouse_offset_vector * self.mouse_speed
-    #
-    # def zoom_keyboard_control(self):
-    #     keys = pygame.key.get_pressed()
-    #     if keys[pygame.K_q]:
-    #         self.zoom_scale += 0.1
-    #     if keys[pygame.K_e]:
-    #         self.zoom_scale -= 0.1
 
     def custom_draw(self, player):
 
@@ -276,7 +218,8 @@ class CameraGroup(pygame.sprite.Group):
 
 
 pygame.init()
-screen = pygame.display.set_mode((2560, 1440), pygame.FULLSCREEN)
+screen = pygame.display.set_mode((0, 0), flags=pygame.FULLSCREEN)
+print(screen.get_size())
 clock = pygame.time.Clock()
 running = True
 dt = 0
