@@ -108,6 +108,7 @@ class Player(pygame.sprite.Sprite):
         self.src_image = self.image  # запоминаем как было
         # ширина - пол высоты
         self.rect = pygame.Rect(pos[0], pos[1], self.image.get_height() // 2, self.image.get_height())
+        self.mask = pygame.mask.from_surface(pygame.surface.Surface(self.rect.size))
         self.jumping = False  # прыжок
         self.onGround = False  # тег "на земле"
         self.velocity = [0, 0]  # вектор скорости
@@ -153,11 +154,17 @@ class Player(pygame.sprite.Sprite):
         self.rect.y += self.velocity[1]  # применяем вектор скорости к у оси
         self.check_y_collisions()  # проверяем столкновения
 
-    def check_x_collisions(self):
-        collisions = pygame.sprite.spritecollide(self, collide_tiles, False)
+        self.check_touch_danger()
+
+    def check_touch_danger(self):
         spike_collisions = []
         for spike in spikes.sprites():
             spike_collisions.append(pygame.sprite.collide_mask(self, spike))
+        if any(spike_collisions):
+            self.kill()
+
+    def check_x_collisions(self):
+        collisions = pygame.sprite.spritecollide(self, collide_tiles, False)
 
         for tile in collisions:  # для каждого тайла, с которым можно сталкиваться
             if self.velocity[0] > 0:  # если направляемся вправо
@@ -167,15 +174,8 @@ class Player(pygame.sprite.Sprite):
                 self.rect.left = tile.rect.right  # спотыкаемся
                 self.velocity[0] = 0  # лежим
 
-        for spike in spike_collisions:
-            if spike:
-                player.kill()
-
     def check_y_collisions(self):
         collisions = pygame.sprite.spritecollide(self, collide_tiles, False)
-        spike_collisions = []
-        for spike in spikes.sprites():
-            spike_collisions.append(pygame.sprite.collide_mask(self, spike))
 
         for tile in collisions:  # для каждого тайла, с которым можно сталкиваться
             if self.velocity[1] > 0:  # если летим вниз
@@ -185,10 +185,6 @@ class Player(pygame.sprite.Sprite):
             elif self.velocity[1] < 0:  # если прягаем вверх
                 self.rect.top = tile.rect.bottom  # ударёмся головой
                 self.velocity[1] = 0  # не мотаем головой лишний раз
-
-        for spike in spike_collisions:
-            if spike:
-                player.kill()
 
 
 class CameraGroup(pygame.sprite.Group):
@@ -207,7 +203,7 @@ class CameraGroup(pygame.sprite.Group):
         self.camera_borders = {'left': screen.get_width() * 0.4,
                                'right': screen.get_width() * 0.4,
                                'top': screen.get_height() * 0.2,
-                               'bottom': screen.get_height() * 0.3}
+                               'bottom': screen.get_height() * 0.2}
         l = self.camera_borders['left']
         t = self.camera_borders['top']
         w = self.display_surface.get_size()[0] - (self.camera_borders['left'] + self.camera_borders['right'])
