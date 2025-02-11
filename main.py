@@ -47,14 +47,30 @@ def gen_level(name):
                     tile = Tile(image_tile, (x * scale, y * scale))
                     if layer.name == "collide":
                         tile.add(collide_tiles)
+                    if level.get_tile_properties_by_gid(gid):
+                        if level.get_tile_properties_by_gid(gid)["type"] == "spikes":
+                            tile.add(spikes)
                     tile.add(all_sprites)
     for obj in level.objects:
-        print(obj.x, obj.y)
+        # print(obj.x, obj.y)
         if obj.visible:
             if obj.type == "Player" and obj.name == "Spawn":
-                player.rect.x = obj.x * SCALE
-                player.rect.y = obj.y * SCALE
+                player.rect.x = obj.x * SCALE * player.scale
+                player.rect.y = obj.y * SCALE * player.scale
     return level, scale
+
+
+def restart(level_name):
+    global player
+    global level
+    global level_scale
+    all_sprites.empty()
+    player.kill()
+    del player
+    player = Player((0, 0))
+    level, level_scale = gen_level(level_name)
+    player.add(player_group)
+    player.add(all_sprites)
 
 
 class Tile(pygame.sprite.Sprite):
@@ -64,11 +80,13 @@ class Tile(pygame.sprite.Sprite):
 
     position - кортеж с координатами в пикселях (x, y)"""
 
-    def __init__(self, image, position):
+    def __init__(self, image, position, mask=True):
         pygame.sprite.Sprite.__init__(self)
         self.image = image  # уставливается текстура
         # self.area = screen.get_rect()  # ?
         self.rect = pygame.Rect(position[0], position[1], self.image.get_width(), self.image.get_height())
+        if mask:
+            self.mask = pygame.mask.from_surface(self.image)
 
 
 class Player(pygame.sprite.Sprite):
@@ -99,7 +117,7 @@ class Player(pygame.sprite.Sprite):
         # self.gr = None
 
     def jump(self):
-        if self.onGround:   # если на земле
+        if self.onGround:  # если на земле
             if not self.jumping:  # если ещё не прыгнули
                 self.jumping = True  # прыгаем
                 self.velocity[1] = -JUMP_V * self.scale  # ускоряемся (с адаптацией, далее - тоже)
@@ -137,6 +155,9 @@ class Player(pygame.sprite.Sprite):
 
     def check_x_collisions(self):
         collisions = pygame.sprite.spritecollide(self, collide_tiles, False)
+        spike_collisions = []
+        for spike in spikes.sprites():
+            spike_collisions.append(pygame.sprite.collide_mask(self, spike))
 
         for tile in collisions:  # для каждого тайла, с которым можно сталкиваться
             if self.velocity[0] > 0:  # если направляемся вправо
@@ -146,8 +167,15 @@ class Player(pygame.sprite.Sprite):
                 self.rect.left = tile.rect.right  # спотыкаемся
                 self.velocity[0] = 0  # лежим
 
+        for spike in spike_collisions:
+            if spike:
+                player.kill()
+
     def check_y_collisions(self):
         collisions = pygame.sprite.spritecollide(self, collide_tiles, False)
+        spike_collisions = []
+        for spike in spikes.sprites():
+            spike_collisions.append(pygame.sprite.collide_mask(self, spike))
 
         for tile in collisions:  # для каждого тайла, с которым можно сталкиваться
             if self.velocity[1] > 0:  # если летим вниз
@@ -157,6 +185,10 @@ class Player(pygame.sprite.Sprite):
             elif self.velocity[1] < 0:  # если прягаем вверх
                 self.rect.top = tile.rect.bottom  # ударёмся головой
                 self.velocity[1] = 0  # не мотаем головой лишний раз
+
+        for spike in spike_collisions:
+            if spike:
+                player.kill()
 
 
 class CameraGroup(pygame.sprite.Group):
@@ -261,8 +293,9 @@ dt = 0  # что это воще
 all_sprites = CameraGroup()  # группа всех спрайтов, что движимы камерой
 player_group = pygame.sprite.Group()  # группа игрока, ладно
 collide_tiles = pygame.sprite.Group()  # группа всех спрайтов, что божьей силой не дают провалиться сквозь них
+spikes = pygame.sprite.Group()
 
-player = Player((0, 0))  # первое зарождение игрока, и да, когда-то давно, он жил на (0,0), и что?
+player = Player((0, 0))  # первое зарождение игрока, и да, когда-то давно он жил на (0;0), и что?
 player.add(player_group)  # инвайтим в группу
 
 level, level_scale = gen_level("levels/test_level.tmx")  # да, сначала появился игрок, потом весь мир, и что?
@@ -292,7 +325,7 @@ while running:
 
     keys = pygame.key.get_pressed()  # какие кнопочки классные!!! (получаем список нажатых кнопок)
     if keys[pygame.K_w] or keys[pygame.K_SPACE]:  # Ц или Пробел
-        player.jump()   # прыжок
+        player.jump()  # прыжок
     if keys[pygame.K_s]:  # присед
         pass
     if keys[pygame.K_a]:  # влево идти
@@ -301,6 +334,10 @@ while running:
         player.right = True
     if keys[pygame.K_LSHIFT]:  # бежать
         player.sprint = True
+    if not player.groups():
+        if keys[pygame.K_r]:
+            print("Restarting...")
+            restart("levels/test_level.tmx")
 
     # дежукер (отладочный режим)
     if DEBUG_MODE:
