@@ -104,14 +104,18 @@ class Player(pygame.sprite.Sprite):
 
     def __init__(self, pos):
         pygame.sprite.Sprite.__init__(self)
-        self.image, _ = load_image('player.png')
+        self.image, _ = load_image('no anim.png')
         self.scale = screen.get_height() / 1152  # получаем коэфицент адаптации
         self.scale_image = SCALE * self.scale  # домножаем масштаб на него
 
+        width = self.image.get_width() * self.scale_image
+        height = self.image.get_height() * self.scale_image
+        if height % 2 != 0:
+            height += 1
+            width += 1
+
         # масштабируем маленькую текстуру
-        self.image = pygame.transform.scale(self.image,
-                                            [self.image.get_width() * self.scale_image,
-                                             self.image.get_height() * self.scale_image])
+        self.image = pygame.transform.scale(self.image, [width, height])
 
         self.src_image = self.image  # запоминаем как было
         # ширина - пол высоты
@@ -297,10 +301,9 @@ screen = pygame.display.set_mode((0, 0), flags=pygame.FULLSCREEN)  # на вес
 
 # лирическое отступление: Если в windows в параметрах экрана установлен масштаб, отличный от 100 процентов, то
 # разрешение определяется с учётом этого масштаба, причём в меньшую сторону. Если масштаб 100, то разрешение
-# определяется сразу и игра запускается сразу, без кат-сцен ввиде мигающего черного экрана. Читы на пропуск кат-сцены
+# определяется сразу и игра запускается сразу, без кат-сцен в виде мигающего черного экрана. Читы на пропуск кат-сцены
 # В общем игра отображется везде одинаково, так что и ладно.
 
-# print(screen.get_size())  # пытаемся понять, почему не все одинаковые
 clock = pygame.time.Clock()  # часы
 running = True  # куда бежим
 dt = 0  # что это воще
@@ -314,7 +317,7 @@ killing_group = pygame.sprite.Group()
 player = Player((0, 0))  # первое зарождение игрока, и да, когда-то давно он жил на (0;0), и что?
 player.add(player_group)  # инвайтим в группу
 
-level, level_scale = gen_level("levels/test_level.tmx")  # да, сначала появился игрок, потом весь мир, и что?
+level, level_scale = gen_level("levels/level1.tmx")  # да, сначала появился игрок, потом весь мир, и что?
 
 player.add(all_sprites)  # он такое же существо, как и все эти... камни?
 
