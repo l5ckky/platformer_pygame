@@ -101,12 +101,12 @@ class Player(pygame.sprite.Sprite):
     """Объект Игрока
 
         pos - кортеж с координатами в пикселях (x, y)"""
-
     def __init__(self, pos):
         pygame.sprite.Sprite.__init__(self)
         self.image, _ = load_image('player.png')
         self.scale = screen.get_height() / 1152  # получаем коэфицент адаптации
         self.scale_image = SCALE * self.scale  # домножаем масштаб на него
+        self.sitting = True
 
         # масштабируем маленькую текстуру
         self.image = pygame.transform.scale(self.image,
@@ -193,6 +193,28 @@ class Player(pygame.sprite.Sprite):
             elif self.velocity[1] < 0:  # если прягаем вверх
                 self.rect.top = tile.rect.bottom  # ударёмся головой
                 self.velocity[1] = 0  # не мотаем головой лишний раз
+
+    def sit(self):
+            if not self.sitting:  # если ещё не ceли
+                self.sitting = True  # сидим
+                # Изменяем размер и позицию прямоугольника для сидения
+                self.rect.height = self.src_image.get_height() // 2  # Уменьшаем высоту вдвое
+                self.rect.width = self.src_image.get_width() // 2
+                self.rect.y += self.src_image.get_height() // 2 # Сдвигаем вниз, чтобы "сесть"
+                # масштабируем текстуру
+                self.image = pygame.transform.scale(self.src_image,
+                                            [self.src_image.get_width() * self.scale_image //2 ,
+                                             self.src_image.get_height() * self.scale_image // 2])
+            else:
+                self.sitting = False
+                self.rect.height = self.src_image.get_height()
+                self.rect.width = self.src_image.get_width() // 2
+                self.rect.y -= self.src_image.get_height() // 2
+                # масштабируем текстуру
+                self.image = pygame.transform.scale(self.src_image,
+                                            [self.src_image.get_width() * self.scale_image,
+                                             self.src_image.get_height() * self.scale_image])
+
 
 
 class CameraGroup(pygame.sprite.Group):
@@ -332,7 +354,8 @@ while running:
                 DEBUG_MODE = not DEBUG_MODE
             if event.key == pygame.K_ESCAPE:  # кнопка выхода
                 running = False  # не бежим
-
+            if event.key == pygame.K_s:  # или любая другая клавиша
+                player.sit()
     # screen.fill("purple")  # льём затекстурье. эм... а зачем?...
 
     all_sprites.update()
