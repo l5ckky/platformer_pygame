@@ -104,7 +104,7 @@ class Player(pygame.sprite.Sprite):
 
     def __init__(self, pos):
         pygame.sprite.Sprite.__init__(self)
-        self.image, _ = load_image('no anim.png')
+        self.image, _ = load_image('player.png')
         self.scale = screen.get_height() / 1152  # получаем коэфицент адаптации
         self.scale_image = SCALE * self.scale  # домножаем масштаб на него
 
@@ -288,6 +288,7 @@ class CameraGroup(pygame.sprite.Group):
         # active elements
         for sprite in self.sprites():
             offset_pos = sprite.rect.topleft - self.offset + self.internal_offset
+            offset_pos.x -= sprite.image.get_width() // 2 + sprite.rect.width // 2
             self.internal_surf.blit(sprite.image, offset_pos)
 
         # scaled_surf = pygame.transform.scale(self.internal_surf, self.internal_surface_size_vector * self.zoom_scale)
