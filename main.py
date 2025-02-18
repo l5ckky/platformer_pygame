@@ -43,9 +43,12 @@ def gen_level(name):
                 image_tile = level.get_tile_image_by_gid(gid)
                 if image_tile:
                     image_tile = pygame.transform.scale(image_tile, [scale, scale])
-                    tile = Tile(image_tile, (x * scale, y * scale))
+                    tile_args = image_tile, (x * scale, y * scale)
+                    tile = Tile(*tile_args)
                     if layer.name == "collide":
                         tile.solid = True
+                    if layer.name == "items":
+                        tile = Item(*tile_args)
                     if level.get_tile_properties_by_gid(gid):
                         if level.get_tile_properties_by_gid(gid)["type"] == "spikes":
                             tile.killing = True
@@ -80,7 +83,7 @@ class Tile(pygame.sprite.Sprite):
 
     position - кортеж с координатами в пикселях (x, y)"""
 
-    def __init__(self, image, position, mask=True, solid=False, killing=False):
+    def __init__(self, image, position, mask=True, solid=False, killing=False, gid=None):
         pygame.sprite.Sprite.__init__(self)
         self.image = image  # уставливается текстура
         # self.area = screen.get_rect()  # ?
@@ -96,6 +99,30 @@ class Tile(pygame.sprite.Sprite):
         if self.killing: self.add(killing_group)
         else: self.remove(killing_group)
 
+        if not self.solid:
+            collision = pygame.sprite.collide_mask(self, player)
+            if collision:
+                self.on_collision()
+
+    def on_collision(self):
+        pass
+
+    def on_click(self):
+        pass
+
+
+class Item(Tile):
+
+    def update(self):
+        super().update()
+
+    def on_collision(self):
+        self.on_collect()
+
+    def on_collect(self):
+        print("Item", str(self), "collected!")
+        pass
+
 
 class Player(pygame.sprite.Sprite):
     """Объект Игрока
@@ -110,6 +137,7 @@ class Player(pygame.sprite.Sprite):
 
         width = self.image.get_width() * self.scale_image
         height = self.image.get_height() * self.scale_image
+        height = round(height)
         if height % 2 != 0:
             height += 1
             width += 1
@@ -266,8 +294,8 @@ class CameraGroup(pygame.sprite.Group):
     def custom_draw(self, player):
 
         if self.level:
-            width = self.level.width * level.tilewidth * player.scale * SCALE
-            height = self.level.height * level.tilewidth * player.scale * SCALE
+            width = self.level.width * self.level.tilewidth * player.scale * SCALE
+            height = self.level.height * self.level.tilewidth * player.scale * SCALE
             if self.background_surf.get_width() != width:
                 self.background_surf = load_image(self.bg_image)[0]
                 self.background_surf = pygame.transform.scale(self.background_surf, (width, height))
@@ -299,6 +327,7 @@ class CameraGroup(pygame.sprite.Group):
 
 pygame.init()  # да
 screen = pygame.display.set_mode((0, 0), flags=pygame.FULLSCREEN)  # на весь экран, размер окна - автоматически
+pxs_in_1px = screen.get_size()
 
 # лирическое отступление: Если в windows в параметрах экрана установлен масштаб, отличный от 100 процентов, то
 # разрешение определяется с учётом этого масштаба, причём в меньшую сторону. Если масштаб 100, то разрешение
