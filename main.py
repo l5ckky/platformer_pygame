@@ -4,6 +4,8 @@ import os
 import pytmx.pytmx
 from pytmx.util_pygame import load_pygame
 
+import random
+
 SCALE = 5  # масштаб игры (1 - виден весь уровень, 5 - виден игрок и по 7-8 тайлов влево и вправо)
 GRAVITY = 1 * SCALE / 5  # константа графитации
 JUMP_V = 13 * SCALE / 5  # скорость прыжка
@@ -38,6 +40,8 @@ def gen_level(name):
     scale = player.rect.height // 2  # высота(ширина) тайла - пол высоты игрока
     tile_width = level.tilewidth  # сколько пикселей тайл в ширину(высоту)
     for layer in level.visible_layers:
+        if layer.name == "player":
+            player.add(all_sprites)
         if isinstance(layer, pytmx.pytmx.TiledTileLayer):
             for x, y, gid in layer:
                 image_tile = level.get_tile_image_by_gid(gid)
@@ -73,7 +77,7 @@ def restart(level_name):
     player = Player((0, 0))
     level, level_scale = gen_level(level_name)
     player.add(player_group)
-    player.add(all_sprites)
+    # player.add(all_sprites)
 
 
 class Tile(pygame.sprite.Sprite):
@@ -113,6 +117,63 @@ class Tile(pygame.sprite.Sprite):
 
 class Item(Tile):
 
+    def __init__(self, image, position, collectable=False, name="None"):
+        super().__init__(image, position)
+
+        self.name = name
+
+        self.collected = False
+        self.picked_up = False
+        self.max_distance = 300 * player.scale
+        self.random_acc = random.randint(10, 16)
+        self.max_distance *= self.random_acc
+        print(self.random_acc)
+
+    def update(self):
+        super().update()
+
+        p_list = player.picked_up_items
+        if p_list and self in p_list:
+            if p_list.index(self)-1 > 0:
+                target_rect = p_list[p_list.index(self)-1].rect
+            else:
+                target_rect = player.rect
+        else:
+            target_rect = player.rect
+
+        if self.picked_up:
+            a = self.rect.centerx - target_rect.centerx
+            b = self.rect.centery - target_rect.centery
+            if abs(a) > self.max_distance or abs(b) > self.max_distance:
+                self.picked_up = False
+                player.picked_up_items.remove(self)
+            self.rect.centerx -= a // self.random_acc
+            self.rect.centery -= b // self.random_acc
+
+    def on_collision(self):
+        self.on_pick_up()
+        pass
+
+    def on_pick_up(self):
+        if not self.picked_up:
+            print("Item", str(self), "picked up!")
+            self.picked_up = True
+            player.picked_up_items.append(self)
+
+    def on_collect(self):
+        print("Item", str(self), "collected!")
+        self.collected = True
+        player.items.append(self)
+        self.kill()
+        pass
+
+    def __str__(self):
+        return self.name
+
+
+class Coin(Item):
+
+
     def update(self):
         super().update()
 
@@ -120,9 +181,14 @@ class Item(Tile):
         self.on_collect()
 
     def on_collect(self):
-        print("Item", str(self), "collected!")
-        pass
+        super().on_collect()
+        # ...
+        # звук монетки
+        # ...
 
+
+class Spike(Tile):
+    pass
 
 class Player(pygame.sprite.Sprite):
     """Объект Игрока
@@ -156,6 +222,9 @@ class Player(pygame.sprite.Sprite):
         self.right = False  # идём вправо
         self.sprint = False  # бежим
         # self.gr = None
+
+        self.picked_up_items = []
+        self.items = []
 
     def jump(self):
         if self.onGround:  # если на земле
@@ -349,7 +418,7 @@ player.add(player_group)  # инвайтим в группу
 
 level, level_scale = gen_level("levels/level1.tmx")  # да, сначала появился игрок, потом весь мир, и что?
 
-player.add(all_sprites)  # он такое же существо, как и все эти... камни?
+# player.add(all_sprites)  # он такое же существо, как и все эти... камни?
 
 debug_text = []
 DEBUG_MODE = False
@@ -374,16 +443,17 @@ while running:
     player.right, player.left, player.sprint = False, False, False  # сбрасываем
 
     keys = pygame.key.get_pressed()  # какие кнопочки классные!!! (получаем список нажатых кнопок)
-    if keys[pygame.K_w] or keys[pygame.K_SPACE]:  # Ц или Пробел
-        player.jump()  # прыжок
-    if keys[pygame.K_s]:  # присед
-        pass
-    if keys[pygame.K_a]:  # влево идти
-        player.left = True
-    if keys[pygame.K_d]:  # вправо идти
-        player.right = True
-    if keys[pygame.K_LSHIFT]:  # бежать
-        player.sprint = True
+    if keys:
+        if keys[pygame.K_w] or keys[pygame.K_SPACE]:  # Ц или Пробел
+            player.jump()  # прыжок
+        if keys[pygame.K_s]:  # присед
+            pass
+        if keys[pygame.K_a]:  # влево идти
+            player.left = True
+        if keys[pygame.K_d]:  # вправо идти
+            player.right = True
+        if keys[pygame.K_LSHIFT]:  # бежать
+            player.sprint = True
     if not player.groups():
         if keys[pygame.K_r]:
             print("Restarting...")
