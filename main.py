@@ -52,11 +52,11 @@ def gen_level(name):
                     if layer.name == "collide":
                         tile.solid = True
                     if layer.name == "items":
+                        tile = Item(*tile_args)
                         if level.get_tile_properties_by_gid(gid):
                             if level.get_tile_properties_by_gid(gid)["type"] == "collectable":
                                 tile = Coin(*tile_args)
                                 tile.name = "coin"
-                            else: tile = Item(*tile_args)
                     if level.get_tile_properties_by_gid(gid):
                         if level.get_tile_properties_by_gid(gid)["type"] == "spikes":
                             tile.killing = True
