@@ -52,7 +52,11 @@ def gen_level(name):
                     if layer.name == "collide":
                         tile.solid = True
                     if layer.name == "items":
-                        tile = Item(*tile_args)
+                        if level.get_tile_properties_by_gid(gid):
+                            if level.get_tile_properties_by_gid(gid)["type"] == "collectable":
+                                tile = Coin(*tile_args)
+                                tile.name = "coin"
+                            else: tile = Item(*tile_args)
                     if level.get_tile_properties_by_gid(gid):
                         if level.get_tile_properties_by_gid(gid)["type"] == "spikes":
                             tile.killing = True
@@ -458,6 +462,27 @@ while running:
         if keys[pygame.K_r]:
             print("Restarting...")
             restart("levels/test_level.tmx")
+
+    # HUD
+    items = {}
+    if player.items:
+        for item in player.items:
+
+            if items.get(item.name):
+                count = items[item.name][0] + 1
+                items[item.name] = (count, item)
+            else:
+                count = 1
+                items[item.name] = (count, item)
+        print(items)
+
+        for name, (count, obj) in items.items():
+            screen.blit(obj.image, (0, 0))
+            font = pygame.font.Font(None, 30)
+            string_rendered = font.render(str(count), 1, pygame.Color('black'))
+            screen.blit(string_rendered, (obj.image.get_width() + 10, obj.image.get_height()//2))
+
+
 
     # дежукер (отладочный режим)
     if DEBUG_MODE:
