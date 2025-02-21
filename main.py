@@ -6,14 +6,14 @@ from pytmx.util_pygame import load_pygame
 
 import random
 
-SCALE = 5  # масштаб игры (1 - виден весь уровень, 5 - виден игрок и по 7-8 тайлов влево и вправо)
-GRAVITY = 1 * SCALE / 5  # константа графитации
-JUMP_V = 13 * SCALE / 5  # скорость прыжка
-WALK_V = 8 * SCALE / 5  # скорость ходьбы
-SPRINT_V = 12 * SCALE / 5  # скорость бега
+SCALE = 400  # масштаб игры (1 - виден весь уровень, 5 - виден игрок и по 7-8 тайлов влево и вправо)
+GRAVITY = 0.2  # константа графитации
+JUMP_V = 2.4  # скорость прыжка
+WALK_V = 2   # скорость ходьбы
+SPRINT_V = 4   # скорость бега
 V_MAX = 100  # ограничение скорости
 
-
+PLAYER_IMAGE = 'no anim.png'
 
 def load_image(name):
     """Загружает изображение
@@ -131,7 +131,7 @@ class Item(Tile):
         self.max_distance = 300 * player.scale
         self.random_acc = random.randint(10, 16)
         self.max_distance *= self.random_acc
-        print(self.random_acc)
+        # print(self.random_acc)
 
     def update(self):
         super().update()
@@ -201,9 +201,9 @@ class Player(pygame.sprite.Sprite):
 
     def __init__(self, pos):
         pygame.sprite.Sprite.__init__(self)
-        self.image, _ = load_image('player.png')
-        self.scale = screen.get_height() / 1152  # получаем коэфицент адаптации
-        self.scale_image = SCALE * self.scale  # домножаем масштаб на него
+        self.image, _ = load_image(PLAYER_IMAGE)
+        self.scale = pxs_in_1px  # получаем коэфицент адаптации
+        self.scale_image = self.scale  # домножаем масштаб на него
 
         width = self.image.get_width() * self.scale_image
         height = self.image.get_height() * self.scale_image
@@ -367,8 +367,8 @@ class CameraGroup(pygame.sprite.Group):
     def custom_draw(self, player):
 
         if self.level:
-            width = self.level.width * self.level.tilewidth * player.scale * SCALE
-            height = self.level.height * self.level.tilewidth * player.scale * SCALE
+            width = self.level.width * self.level.tilewidth * player.scale * pxs_in_1px
+            height = self.level.height * self.level.tilewidth * player.scale * pxs_in_1px
             if self.background_surf.get_width() != width:
                 self.background_surf = load_image(self.bg_image)[0]
                 self.background_surf = pygame.transform.scale(self.background_surf, (width, height))
@@ -400,7 +400,8 @@ class CameraGroup(pygame.sprite.Group):
 
 pygame.init()  # да
 screen = pygame.display.set_mode((0, 0), flags=pygame.FULLSCREEN)  # на весь экран, размер окна - автоматически
-pxs_in_1px = screen.get_size()
+pxs_in_1px = round(screen.get_width() / SCALE)
+print(pxs_in_1px)
 
 # лирическое отступление: Если в windows в параметрах экрана установлен масштаб, отличный от 100 процентов, то
 # разрешение определяется с учётом этого масштаба, причём в меньшую сторону. Если масштаб 100, то разрешение
@@ -474,15 +475,13 @@ while running:
             else:
                 count = 1
                 items[item.name] = (count, item)
-        print(items)
+        # print(items)
 
         for name, (count, obj) in items.items():
             screen.blit(obj.image, (0, 0))
             font = pygame.font.Font(None, 30)
             string_rendered = font.render(str(count), 1, pygame.Color('black'))
             screen.blit(string_rendered, (obj.image.get_width() + 10, obj.image.get_height()//2))
-
-
 
     # дежукер (отладочный режим)
     if DEBUG_MODE:
