@@ -9,11 +9,12 @@ import random
 SCALE = 400  # масштаб игры (1 - виден весь уровень, 5 - виден игрок и по 7-8 тайлов влево и вправо)
 GRAVITY = 0.2  # константа графитации
 JUMP_V = 2.4  # скорость прыжка
-WALK_V = 2   # скорость ходьбы
-SPRINT_V = 4   # скорость бега
+WALK_V = 2  # скорость ходьбы
+SPRINT_V = 4  # скорость бега
 V_MAX = 100  # ограничение скорости
 
 PLAYER_IMAGE = 'no anim.png'
+
 
 def load_image(name):
     """Загружает изображение
@@ -37,7 +38,7 @@ def gen_level(name):
 
         Возвращает кортеж с загруженным уровнем и размером тайла в пикселях """
     level = load_pygame(name)  # получаем уровень
-    scale = player.rect.height // 2  # высота(ширина) тайла - пол высоты игрока
+    scale = player.rect.width  # высота(ширина) тайла - пол высоты игрока
     tile_width = level.tilewidth  # сколько пикселей тайл в ширину(высоту)
     for layer in level.visible_layers:
         if layer.name == "player":
@@ -102,10 +103,14 @@ class Tile(pygame.sprite.Sprite):
         self.killing = killing
 
     def update(self):
-        if self.solid: self.add(collide_tiles)
-        else: self.remove(collide_tiles)
-        if self.killing: self.add(killing_group)
-        else: self.remove(killing_group)
+        if self.solid:
+            self.add(collide_tiles)
+        else:
+            self.remove(collide_tiles)
+        if self.killing:
+            self.add(killing_group)
+        else:
+            self.remove(killing_group)
 
         if not self.solid:
             collision = pygame.sprite.collide_mask(self, player)
@@ -138,8 +143,8 @@ class Item(Tile):
 
         p_list = player.picked_up_items
         if p_list and self in p_list:
-            if p_list.index(self)-1 > 0:
-                target_rect = p_list[p_list.index(self)-1].rect
+            if p_list.index(self) - 1 > 0:
+                target_rect = p_list[p_list.index(self) - 1].rect
             else:
                 target_rect = player.rect
         else:
@@ -177,7 +182,6 @@ class Item(Tile):
 
 class Coin(Item):
 
-
     def update(self):
         super().update()
 
@@ -194,6 +198,7 @@ class Coin(Item):
 class Spike(Tile):
     pass
 
+
 class Player(pygame.sprite.Sprite):
     """Объект Игрока
 
@@ -207,21 +212,27 @@ class Player(pygame.sprite.Sprite):
 
         width = self.image.get_width() * self.scale_image
         height = self.image.get_height() * self.scale_image
+        # width = round(width)
         height = round(height)
         if height % 2 != 0:
-            height += 1
-            width += 1
+            height -= 1
+            width -= 1
+
 
         # масштабируем маленькую текстуру
         self.image = pygame.transform.scale(self.image, [width, height])
 
         self.src_image = self.image  # запоминаем как было
         # ширина - пол высоты
-        self.rect = pygame.Rect(pos[0], pos[1], self.image.get_height() // 2, self.image.get_height())
+
+        w = self.image.get_height() // 2
+
+        self.rect = pygame.Rect(pos[0], pos[1], w, self.image.get_height())
+        print(self.rect.size)
         self.mask = pygame.mask.from_surface(pygame.surface.Surface(self.rect.size))
         self.jumping = False  # прыжок
         self.onGround = False  # тег "на земле"
-        self.velocity = [0, 0]  # вектор скорости
+        self.velocity = [.0, .0]  # вектор скорости
         self.left = False  # идём влево
         self.right = False  # идём вправо
         self.sprint = False  # бежим
@@ -367,8 +378,8 @@ class CameraGroup(pygame.sprite.Group):
     def custom_draw(self, player):
 
         if self.level:
-            width = self.level.width * self.level.tilewidth * player.scale * pxs_in_1px
-            height = self.level.height * self.level.tilewidth * player.scale * pxs_in_1px
+            width = round(self.level.width * self.level.tilewidth * player.scale * pxs_in_1px)
+            height = round(self.level.height * self.level.tilewidth * player.scale * pxs_in_1px)
             if self.background_surf.get_width() != width:
                 self.background_surf = load_image(self.bg_image)[0]
                 self.background_surf = pygame.transform.scale(self.background_surf, (width, height))
@@ -389,7 +400,10 @@ class CameraGroup(pygame.sprite.Group):
         # active elements
         for sprite in self.sprites():
             offset_pos = sprite.rect.topleft - self.offset + self.internal_offset
-            offset_pos.x -= sprite.image.get_width() // 2 + sprite.rect.width // 2
+            if isinstance(sprite, Player):
+                offset_pos.x -= sprite.image.get_width() / 4
+                pass
+
             self.internal_surf.blit(sprite.image, offset_pos)
 
         # scaled_surf = pygame.transform.scale(self.internal_surf, self.internal_surface_size_vector * self.zoom_scale)
@@ -400,7 +414,8 @@ class CameraGroup(pygame.sprite.Group):
 
 pygame.init()  # да
 screen = pygame.display.set_mode((0, 0), flags=pygame.FULLSCREEN)  # на весь экран, размер окна - автоматически
-pxs_in_1px = round(screen.get_width() / SCALE)
+print("Обнаружен экран с разершением", screen.get_size())
+pxs_in_1px = round((screen.get_width() // 25) * 6 / (1920 // 25))
 print(pxs_in_1px)
 
 # лирическое отступление: Если в windows в параметрах экрана установлен масштаб, отличный от 100 процентов, то
@@ -481,7 +496,7 @@ while running:
             screen.blit(obj.image, (0, 0))
             font = pygame.font.Font(None, 30)
             string_rendered = font.render(str(count), 1, pygame.Color('black'))
-            screen.blit(string_rendered, (obj.image.get_width() + 10, obj.image.get_height()//2))
+            screen.blit(string_rendered, (obj.image.get_width() + 10, obj.image.get_height() // 2))
 
     # дежукер (отладочный режим)
     if DEBUG_MODE:
