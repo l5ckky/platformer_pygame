@@ -134,7 +134,7 @@ class Item(Tile):
         self.collected = False
         self.picked_up = False
         self.max_distance = 300 * player.scale
-        self.random_acc = random.randint(10, 16)
+        self.random_acc = random.randint(10, 15)
         self.max_distance *= self.random_acc
         # print(self.random_acc)
 
@@ -143,7 +143,7 @@ class Item(Tile):
 
         p_list = player.picked_up_items
         if p_list and self in p_list:
-            if p_list.index(self) - 1 > 0:
+            if p_list.index(self) - 1 >= 0:
                 target_rect = p_list[p_list.index(self) - 1].rect
             else:
                 target_rect = player.rect
@@ -153,11 +153,13 @@ class Item(Tile):
         if self.picked_up:
             a = self.rect.centerx - target_rect.centerx
             b = self.rect.centery - target_rect.centery
+
+            self.rect.centerx -= a / self.random_acc
+            self.rect.centery -= b / self.random_acc
+
             if abs(a) > self.max_distance or abs(b) > self.max_distance:
                 self.picked_up = False
                 player.picked_up_items.remove(self)
-            self.rect.centerx -= a // self.random_acc
-            self.rect.centery -= b // self.random_acc
 
     def on_collision(self):
         self.on_pick_up()
@@ -228,7 +230,10 @@ class Player(pygame.sprite.Sprite):
         w = self.image.get_height() // 2
 
         self.rect = pygame.Rect(pos[0], pos[1], w, self.image.get_height())
-        print(self.rect.size)
+        self.use_radius = 2
+
+        self.use_rect = self.rect.scale_by(self.use_radius, self.use_radius)
+
         self.mask = pygame.mask.from_surface(pygame.surface.Surface(self.rect.size))
         self.jumping = False  # прыжок
         self.onGround = False  # тег "на земле"
