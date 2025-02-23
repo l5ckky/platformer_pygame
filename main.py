@@ -15,6 +15,8 @@ V_MAX = 100  # ограничение скорости
 
 PLAYER_IMAGE = 'no anim.png'
 
+COINS_MAGNET = pygame.USEREVENT + 1
+coins = []
 
 def load_image(name):
     """Загружает изображение
@@ -55,12 +57,22 @@ def gen_level(name):
                     if layer.name == "items":
                         tile = Item(*tile_args)
                         if level.get_tile_properties_by_gid(gid):
-                            if level.get_tile_properties_by_gid(gid)["type"] == "collectable":
+                            if level.get_tile_properties_by_gid(gid)["type"] == "coin":
                                 tile = Coin(*tile_args)
                                 tile.name = "coin"
+                            # if level.get_tile_properties_by_gid(gid)["type"] == "key":
+                            #     tile = Coin(*tile_args)
+                            #     tile.name = "coin"
                     if level.get_tile_properties_by_gid(gid):
-                        if level.get_tile_properties_by_gid(gid)["type"] == "spikes":
+                        if level.get_tile_properties_by_gid(gid)["type"] == "spike":
                             tile.killing = True
+                        if level.get_tile_properties_by_gid(gid)["type"] == "chest":
+                            tile = Chest(*tile_args)
+                            img = level.images[1].convert_alpha()
+                            tile.opened_image = pygame.transform.scale(img, [scale, scale])
+                            tile.name = "chest"
+                            img = level.images[2]
+                            tile.coin_image = pygame.transform.scale(img, [scale, scale])
                     tile.add(all_sprites)
     for obj in level.objects:
         # print(obj.x, obj.y)
@@ -117,10 +129,15 @@ class Tile(pygame.sprite.Sprite):
             if collision:
                 self.on_collision()
 
+        use_collision = self.rect.colliderect(player.use_rect)
+        if use_collision:
+            if pygame.key.get_pressed()[pygame.K_e]:
+                self.on_use()
+
     def on_collision(self):
         pass
 
-    def on_click(self):
+    def on_use(self):
         pass
 
 
@@ -184,8 +201,24 @@ class Item(Tile):
 
 class Coin(Item):
 
+    def __init__(self, image, pos, magnet=False):
+        super().__init__(image, pos)
+
+        self.magnet = magnet
+        self.random_acc = random.randint(6, 12)
+
     def update(self):
         super().update()
+
+        target_rect = player.rect
+
+        if self.magnet:
+            a = self.rect.centerx - target_rect.centerx
+            b = self.rect.centery - target_rect.centery
+
+            self.rect.centerx -= a / self.random_acc
+            self.rect.centery -= b / self.random_acc
+
 
     def on_collision(self):
         self.on_collect()
@@ -195,6 +228,43 @@ class Coin(Item):
         # ...
         # звук монетки
         # ...
+
+
+class Chest(Tile):
+    def __init__(self, image, position, key_id=None):
+        super().__init__(image, position)
+
+        self.key_id = key_id
+        print("init ", self)
+
+        self.opened = False
+        self.coin_image = None
+        self.opened_image = None
+        self.closed_image = self.image
+        self.coins = random.randint(10, 20)
+
+    def update(self):
+        super().update()
+        if self.opened:
+            self.image = self.opened_image
+        else:
+            self.image = self.closed_image
+
+    def on_use(self):
+        # opened_chest_image = level.get_tile_image_by_gid()
+        # self.image = opened_chest_image
+        if not self.opened:
+            if len(player.picked_up_items) >= 1:
+                key = player.picked_up_items.pop(0)
+                for i in range(self.coins):
+                    x = self.rect.x + (random.randint(-8,8)) * self.rect.width/2
+                    y = self.rect.y + (random.randint(-8,8)) * self.rect.width/2
+                    a = Coin(self.coin_image, (x,y))
+                    a.add(all_sprites)
+                    coins.append(a)
+                    pygame.time.set_timer(COINS_MAGNET, 100)
+                key.kill()
+                self.opened = True
 
 
 class Spike(Tile):
@@ -219,7 +289,6 @@ class Player(pygame.sprite.Sprite):
         if height % 2 != 0:
             height -= 1
             width -= 1
-
 
         # масштабируем маленькую текстуру
         self.image = pygame.transform.scale(self.image, [width, height])
@@ -282,6 +351,8 @@ class Player(pygame.sprite.Sprite):
 
         self.rect.y += self.velocity[1]  # применяем вектор скорости к у оси
         self.check_y_collisions()  # проверяем столкновения
+
+        self.use_rect = self.rect.scale_by(self.use_radius, self.use_radius)
 
         self.check_touch_danger()
 
@@ -419,7 +490,7 @@ class CameraGroup(pygame.sprite.Group):
 
 pygame.init()  # да
 screen = pygame.display.set_mode((0, 0), flags=pygame.FULLSCREEN)  # на весь экран, размер окна - автоматически
-print("Обнаружен экран с разершением", screen.get_size())
+print("Обнаружен экран с разрешением", screen.get_size())
 pxs_in_1px = round((screen.get_width() // 25) * 6 / (1920 // 25))
 print(pxs_in_1px)
 
@@ -459,6 +530,9 @@ while running:
                 DEBUG_MODE = not DEBUG_MODE
             if event.key == pygame.K_ESCAPE:  # кнопка выхода
                 running = False  # не бежим
+        if event.type == COINS_MAGNET:
+            for i in coins:
+                i.magnet = True
 
     # screen.fill("purple")  # льём затекстурье. эм... а зачем?...
 
