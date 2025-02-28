@@ -1,3 +1,5 @@
+import time
+
 import pygame
 import os
 
@@ -17,6 +19,10 @@ PLAYER_IMAGE = 'no anim.png'
 
 COINS_MAGNET = pygame.USEREVENT + 1
 coins = []
+
+FADE_OUT = 0
+CURRENT_LEVEL = None
+teleport = None
 
 def load_image(name):
     """Загружает изображение
@@ -71,6 +77,7 @@ def gen_level(name):
                             img = level.images[1].convert_alpha()
                             tile.opened_image = pygame.transform.scale(img, [scale, scale])
                             tile.name = "chest"
+                            tile.can_use = True
                             img = level.images[2]
                             tile.coin_image = pygame.transform.scale(img, [scale, scale])
                     tile.add(all_sprites)
@@ -80,6 +87,15 @@ def gen_level(name):
             if obj.type == "Player" and obj.name == "Spawn":
                 player.rect.x = obj.x / tile_width * scale
                 player.rect.y = obj.y / tile_width * scale
+            if obj.type == "teleport":
+                print("init TLEPORT", obj)
+                x = obj.x / tile_width * scale
+                y = obj.y / tile_width * scale
+                img = pygame.transform.scale(obj.image, [scale, scale * 2])
+                t = Teleport(img, (x, y), dest=obj.name)
+                t.can_use = True
+                t.add(all_sprites)
+                print(t)
     all_sprites.level = level  # сообщаем группе об уровне
     return level, scale
 
@@ -88,12 +104,15 @@ def restart(level_name):
     global player
     global level
     global level_scale
+    for sprite in all_sprites.sprites():
+        sprite.kill()
     all_sprites.empty()
     player.kill()
     del player
     player = Player((0, 0))
-    level, level_scale = gen_level(level_name)
     player.add(player_group)
+    level, level_scale = gen_level(f"levels/{level_name}")
+
     # player.add(all_sprites)
 
 
@@ -104,7 +123,7 @@ class Tile(pygame.sprite.Sprite):
 
     position - кортеж с координатами в пикселях (x, y)"""
 
-    def __init__(self, image, position, mask=True, solid=False, killing=False, gid=None):
+    def __init__(self, image, position, mask=True, solid=False, killing=False, gid=None, can_use=False):
         pygame.sprite.Sprite.__init__(self)
         self.image = image  # уставливается текстура
         # self.area = screen.get_rect()  # ?
@@ -113,6 +132,8 @@ class Tile(pygame.sprite.Sprite):
             self.mask = pygame.mask.from_surface(self.image)
         self.solid = solid
         self.killing = killing
+
+        self.can_use = can_use
 
     def update(self):
         if self.solid:
@@ -130,7 +151,7 @@ class Tile(pygame.sprite.Sprite):
                 self.on_collision()
 
         use_collision = self.rect.colliderect(player.use_rect)
-        if use_collision:
+        if use_collision and self.can_use:
             if pygame.key.get_pressed()[pygame.K_e]:
                 self.on_use()
 
@@ -219,7 +240,6 @@ class Coin(Item):
             self.rect.centerx -= a / self.random_acc
             self.rect.centery -= b / self.random_acc
 
-
     def on_collision(self):
         self.on_collect()
 
@@ -257,9 +277,9 @@ class Chest(Tile):
             if len(player.picked_up_items) >= 1:
                 key = player.picked_up_items.pop(0)
                 for i in range(self.coins):
-                    x = self.rect.x + (random.randint(-8,8)) * self.rect.width/2
-                    y = self.rect.y + (random.randint(-8,8)) * self.rect.width/2
-                    a = Coin(self.coin_image, (x,y))
+                    x = self.rect.x + (random.randint(-8, 8)) * self.rect.width / 2
+                    y = self.rect.y + (random.randint(-8, 8)) * self.rect.width / 2
+                    a = Coin(self.coin_image, (x, y))
                     a.add(all_sprites)
                     coins.append(a)
                     pygame.time.set_timer(COINS_MAGNET, 100)
@@ -267,8 +287,27 @@ class Chest(Tile):
                 self.opened = True
 
 
-class Spike(Tile):
-    pass
+class Teleport(Tile):
+
+    def __init__(self, image, position, dest="Unknown"):
+        super().__init__(image, position)
+
+        self.dest = dest
+
+        if dest.endswith(".tmx"):
+            self.dest_level = dest[:-4]
+        else:
+            self.dest_level = None
+
+    def update(self):
+        super().update()
+
+    def on_use(self):
+        global FADE_OUT
+        global teleport
+        super().on_use()
+        FADE_OUT = 1
+        teleport = self
 
 
 class Player(pygame.sprite.Sprite):
@@ -499,6 +538,8 @@ print(pxs_in_1px)
 # определяется сразу и игра запускается сразу, без кат-сцен в виде мигающего черного экрана. Читы на пропуск кат-сцены
 # В общем игра отображется везде одинаково, так что и ладно.
 
+color_cor = pygame.Surface(screen.get_size())
+
 clock = pygame.time.Clock()  # часы
 running = True  # куда бежим
 dt = 0  # что это воще
@@ -534,7 +575,7 @@ while running:
             for i in coins:
                 i.magnet = True
 
-    # screen.fill("purple")  # льём затекстурье. эм... а зачем?...
+    screen.fill("purple")  # льём затекстурье. эм... а зачем?...
 
     all_sprites.update()
     all_sprites.custom_draw(player)  # кастомно применяем алгоритмы камеры
@@ -556,7 +597,7 @@ while running:
     if not player.groups():
         if keys[pygame.K_r]:
             print("Restarting...")
-            restart("levels/test_level.tmx")
+            restart(CURRENT_LEVEL)
 
     # HUD
     items = {}
@@ -606,6 +647,24 @@ while running:
                       f"POS {player.rect.x} {player.rect.y}",
                       f"GR {player.onGround}",
                       f"SPRINT {player.sprint}"]
+
+    if 0 < FADE_OUT < 256:
+        color_cor.fill(pygame.Color(0, 0, 0))
+        color_cor.set_alpha(FADE_OUT)
+        screen.blit(color_cor, (0, 0))
+        FADE_OUT += 5
+    elif 256 <= FADE_OUT <= 256+256:
+        color_cor.fill(pygame.Color(0, 0, 0))
+        color_cor.set_alpha(256*2-FADE_OUT)
+        screen.blit(color_cor, (0, 0))
+        FADE_OUT += 5
+    else:
+        FADE_OUT = 0
+
+    if FADE_OUT == 256:
+        if teleport:
+            CURRENT_LEVEL = teleport.dest
+            restart(CURRENT_LEVEL)
 
     pygame.display.flip()  # обновляем кадр
 
