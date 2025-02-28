@@ -24,6 +24,7 @@ FADE_OUT = 0
 CURRENT_LEVEL = None
 teleport = None
 
+
 def load_image(name):
     """Загружает изображение
 
@@ -135,6 +136,9 @@ class Tile(pygame.sprite.Sprite):
 
         self.can_use = can_use
 
+        self.display_text = None
+        self.use_text = "Нажмите E, чтобы использовать"
+
     def update(self):
         if self.solid:
             self.add(collide_tiles)
@@ -151,7 +155,9 @@ class Tile(pygame.sprite.Sprite):
                 self.on_collision()
 
         use_collision = self.rect.colliderect(player.use_rect)
+        self.display_text = None
         if use_collision and self.can_use:
+            self.display_text = self.use_text
             if pygame.key.get_pressed()[pygame.K_e]:
                 self.on_use()
 
@@ -261,14 +267,19 @@ class Chest(Tile):
         self.coin_image = None
         self.opened_image = None
         self.closed_image = self.image
-        self.coins = random.randint(10, 20)
+        self.coins = 10
+        self.use_text = "Сундук заперт"
 
     def update(self):
         super().update()
         if self.opened:
+            self.use_text = ""
             self.image = self.opened_image
         else:
+            self.use_text = "Сундук заперт"
             self.image = self.closed_image
+            if player.picked_up_items:
+                self.use_text = "Нажмите E, чтобы открыть"
 
     def on_use(self):
         # opened_chest_image = level.get_tile_image_by_gid()
@@ -465,6 +476,10 @@ class CameraGroup(pygame.sprite.Group):
         self.zoom_scale = 1
         self.internal_surf_size = (screen.get_width(), screen.get_height())
         self.internal_surf = pygame.Surface(self.internal_surf_size, pygame.SRCALPHA)
+
+        self.text_surf_size = (screen.get_width(), screen.get_height())
+        self.text_surf = pygame.Surface(self.internal_surf_size, pygame.SRCALPHA)
+
         # self.internal_surf = pygame.transform.scale(self.internal_surf, screen.get_size())
         self.internal_rect = self.internal_surf.get_rect(center=(self.half_w, self.half_h))
         self.internal_surface_size_vector = pygame.math.Vector2(self.internal_surf_size)
@@ -491,6 +506,7 @@ class CameraGroup(pygame.sprite.Group):
         self.offset.y = self.camera_rect.top - self.camera_borders['top']
 
     def custom_draw(self, player):
+        self.text_surf.fill((0,0,0,0))
 
         if self.level:
             width = round(self.level.width * self.level.tilewidth * player.scale * pxs_in_1px)
@@ -520,11 +536,21 @@ class CameraGroup(pygame.sprite.Group):
                 pass
 
             self.internal_surf.blit(sprite.image, offset_pos)
+            if isinstance(sprite, Chest):
+                # pygame.draw.rect(self.internal_surf, "red", (offset_pos, sprite.rect.size))
+                if sprite.display_text:
+                    font = pygame.font.Font(None, 30)
+                    string_rendered = font.render(sprite.display_text, 1, pygame.Color('black'))
+                    pos = offset_pos
+                    self.text_surf.blit(string_rendered,
+                                        ((pos[0] + sprite.rect.w // 2) - string_rendered.get_width() // 2,
+                                         pos[1] - string_rendered.get_height()))
 
         # scaled_surf = pygame.transform.scale(self.internal_surf, self.internal_surface_size_vector * self.zoom_scale)
         scaled_rect = self.internal_surf.get_rect(center=(self.half_w, self.half_h))
 
         self.display_surface.blit(self.internal_surf, scaled_rect)
+        self.display_surface.blit(self.text_surf, self.text_surf.get_rect(center=(self.half_w, self.half_h)))
 
 
 pygame.init()  # да
@@ -653,9 +679,9 @@ while running:
         color_cor.set_alpha(FADE_OUT)
         screen.blit(color_cor, (0, 0))
         FADE_OUT += 5
-    elif 256 <= FADE_OUT <= 256+256:
+    elif 256 <= FADE_OUT <= 256 + 256:
         color_cor.fill(pygame.Color(0, 0, 0))
-        color_cor.set_alpha(256*2-FADE_OUT)
+        color_cor.set_alpha(256 * 2 - FADE_OUT)
         screen.blit(color_cor, (0, 0))
         FADE_OUT += 5
     else:
