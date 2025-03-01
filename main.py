@@ -104,16 +104,22 @@ def gen_level(name):
     return level, scale
 
 
-def restart(level_name):
+def restart(level_name, save_money=True):
     global player
     global level
     global level_scale
+    money = []
+    if save_money:
+        money = player.items
+
     for sprite in all_sprites.sprites():
         sprite.kill()
     all_sprites.empty()
     player.kill()
     del player
     player = Player((0, 0))
+    if save_money:
+        player.items = money
     player.add(player_group)
     level, level_scale = gen_level(f"levels/{level_name}")
 
@@ -161,7 +167,7 @@ class Tile(pygame.sprite.Sprite):
         self.display_text = None
         if use_collision and self.can_use:
             self.display_text = self.use_text
-            if pygame.key.get_pressed()[pygame.K_e]:
+            if pygame.key.get_pressed()[pygame.K_e] and not player.paralich:
                 self.on_use()
 
     def on_collision(self):
@@ -307,6 +313,7 @@ class Teleport(Tile):
         super().__init__(image, position)
 
         self.dest = dest
+        self.in_use = False
 
         if dest.endswith(".tmx"):
             self.dest_level = dest[:-4]
@@ -322,8 +329,11 @@ class Teleport(Tile):
         global FADE_OUT
         global teleport
         super().on_use()
-        FADE_OUT = 1
-        teleport = self
+        if not self.in_use:
+            self.in_use = True
+            FADE_OUT = 1
+            teleport = self
+            player.paralich = True
 
 
 class Player(pygame.sprite.Sprite):
@@ -338,7 +348,7 @@ class Player(pygame.sprite.Sprite):
         self.scale_image = self.scale  # домножаем масштаб на него
 
         self.image_width = self.image.get_width() * self.scale_image
-        self.image_height = self.image.get_height() * self.scale_image
+        self.image_height = (self.image.get_height() + 1) * self.scale_image
         # width = round(width)
         self.image_height = round(self.image_height)
         if self.image_height % 2 != 0:
@@ -372,6 +382,7 @@ class Player(pygame.sprite.Sprite):
         self.left = False  # идём влево
         self.right = False  # идём вправо
         self.sprint = False  # бежим
+        self.paralich = False
         # self.gr = None
 
         self.picked_up_items = []
@@ -586,6 +597,8 @@ class CameraGroup(pygame.sprite.Group):
             offset_pos = sprite.rect.topleft - self.offset + self.internal_offset
             if isinstance(sprite, Player):
                 offset_pos.x -= sprite.image.get_width() / 4
+                offset_pos.y += (sprite.rect.h - sprite.image.get_height())
+
                 pass
 
             self.internal_surf.blit(sprite.image, offset_pos)
@@ -662,7 +675,7 @@ while running:
     player.right, player.left, player.sprint = False, False, False  # сбрасываем
 
     keys = pygame.key.get_pressed()  # какие кнопочки классные!!! (получаем список нажатых кнопок)
-    if keys:
+    if keys and not player.paralich:
         if keys[pygame.K_w] or keys[pygame.K_SPACE]:  # Ц или Пробел
             player.jump()  # прыжок
         if keys[pygame.K_s]:  # присед
