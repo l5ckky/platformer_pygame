@@ -10,12 +10,15 @@ import random
 
 SCALE = 400  # масштаб игры (1 - виден весь уровень, 5 - виден игрок и по 7-8 тайлов влево и вправо)
 GRAVITY = 0.2  # константа графитации
-JUMP_V = 2.4  # скорость прыжка
+JUMP_V = 2.3  # скорость прыжка
 WALK_V = 2  # скорость ходьбы
 SPRINT_V = 4  # скорость бега
 V_MAX = 100  # ограничение скорости
 
-PLAYER_IMAGE = 'no anim.png'
+PLAYER_IMAGE = 'no anim2.png'
+PLAYER_IDLE = ('no move anim.png', 4, 6)
+PLAYER_RUN = ('run2.png', 6, 30)
+PLAYER_WALK = ('walk2.png', 6, 15)
 
 COINS_MAGNET = pygame.USEREVENT + 1
 coins = []
@@ -310,6 +313,8 @@ class Teleport(Tile):
         else:
             self.dest_level = None
 
+        self.use_text = "Нажмите E, чтобы переместиться"
+
     def update(self):
         super().update()
 
@@ -332,16 +337,23 @@ class Player(pygame.sprite.Sprite):
         self.scale = pxs_in_1px  # получаем коэфицент адаптации
         self.scale_image = self.scale  # домножаем масштаб на него
 
-        width = self.image.get_width() * self.scale_image
-        height = self.image.get_height() * self.scale_image
+        self.image_width = self.image.get_width() * self.scale_image
+        self.image_height = self.image.get_height() * self.scale_image
         # width = round(width)
-        height = round(height)
-        if height % 2 != 0:
-            height -= 1
-            width -= 1
+        self.image_height = round(self.image_height)
+        if self.image_height % 2 != 0:
+            self.image_height -= 1
+            self.image_width -= 1
 
         # масштабируем маленькую текстуру
-        self.image = pygame.transform.scale(self.image, [width, height])
+        self.image = pygame.transform.scale(self.image, [self.image_width, self.image_height])
+
+        self.idle_anim = self.cut_frames(PLAYER_IDLE)
+        self.walk_anim = self.cut_frames(PLAYER_WALK)
+        self.run_anim = self.cut_frames(PLAYER_RUN)
+        self.cur_frame = 0
+        self.cur_fr_anim = 0
+        self.reverse = False
 
         self.src_image = self.image  # запоминаем как было
         # ширина - пол высоты
@@ -365,6 +377,23 @@ class Player(pygame.sprite.Sprite):
         self.picked_up_items = []
         self.items = []
 
+    def cut_frames(self, anim):
+        image_name, n, _ = anim
+        surf = load_image(image_name)[0]
+        image_width = surf.get_width() * self.scale_image
+        image_height = surf.get_height() * self.scale_image
+        # width = round(width)
+        image_height = round(image_height)
+        if image_height % 2 != 0:
+            image_height -= 1
+            image_width -= 1
+        surf = pygame.transform.scale(surf, (image_width, image_height))
+        animation = []
+        for i in range(n):
+            new_surf = surf.subsurface(surf.get_width()//n * i, 0, surf.get_width()//n, surf.get_height())
+            animation.append(new_surf)
+        return animation
+
     def jump(self):
         if self.onGround:  # если на земле
             if not self.jumping:  # если ещё не прыгнули
@@ -375,11 +404,13 @@ class Player(pygame.sprite.Sprite):
         self.onGround = False  # сбрасывает тег "на земле"
         self.velocity[0] = 0  # сбрасываем скорость
         if self.right:
-            self.image = self.src_image  # согласны, узнали?
+            # self.image = self.src_image  # согласны, узнали?
+            self.reverse = False
             # ой тут короче лень было многострочные условия делать
             self.velocity[0] = SPRINT_V * self.scale if self.sprint else WALK_V * self.scale
         if self.left:
-            self.image = pygame.transform.flip(self.src_image, 1, 0)  # разворачиваемся и уходим
+            # self.image = pygame.transform.flip(self.src_image, 1, 0)  # разворачиваемся и уходим
+            self.reverse = True
             # если бежим, то скорость соответвующая; если идём, идём размеренным шагом
             self.velocity[0] = -SPRINT_V * self.scale if self.sprint else -WALK_V * self.scale
 
@@ -405,6 +436,28 @@ class Player(pygame.sprite.Sprite):
         self.use_rect = self.rect.scale_by(self.use_radius, self.use_radius)
 
         self.check_touch_danger()
+
+        if self.velocity[0] == 0:
+            current_anim = self.idle_anim
+            current_anim_conf = PLAYER_IDLE
+        else:
+            current_anim = self.walk_anim
+            current_anim_conf = PLAYER_WALK
+            if self.sprint:
+                current_anim = self.run_anim
+                current_anim_conf = PLAYER_RUN
+        self.cur_frame += 1
+        if self.cur_frame >= 60 // current_anim_conf[2]:
+            self.cur_frame = 0
+            self.cur_fr_anim = self.cur_fr_anim + 1
+        self.cur_fr_anim = self.cur_fr_anim % len(current_anim)
+        self.image = self.check_reverse(current_anim[self.cur_fr_anim])
+
+    def check_reverse(self, frame):
+        if self.reverse:
+            return pygame.transform.flip(frame, 1, 0)
+        else:
+            return frame
 
     def check_touch_danger(self):
         spike_collisions = []
@@ -536,7 +589,7 @@ class CameraGroup(pygame.sprite.Group):
                 pass
 
             self.internal_surf.blit(sprite.image, offset_pos)
-            if isinstance(sprite, Chest):
+            if isinstance(sprite, (Chest, Teleport)):
                 # pygame.draw.rect(self.internal_surf, "red", (offset_pos, sprite.rect.size))
                 if sprite.display_text:
                     font = pygame.font.Font(None, 30)
@@ -672,7 +725,9 @@ while running:
         debug_text = [f"VEL {player.velocity[0]} {player.velocity[1]}",
                       f"POS {player.rect.x} {player.rect.y}",
                       f"GR {player.onGround}",
-                      f"SPRINT {player.sprint}"]
+                      f"SPRINT {player.sprint}",
+                      f"CUR_FR_ANIM {player.cur_fr_anim}",
+                      f"CUR_FR {player.cur_frame}"]
 
     if 0 < FADE_OUT < 256:
         color_cor.fill(pygame.Color(0, 0, 0))
