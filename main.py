@@ -328,12 +328,28 @@ class Teleport(Tile):
     def on_use(self):
         global FADE_OUT
         global teleport
+        global color_cor_func
         super().on_use()
         if not self.in_use:
             self.in_use = True
             FADE_OUT = 1
+            color_cor_func = black_screen_fade
             teleport = self
             player.paralich = True
+
+
+def black_screen_fade():
+    surf = color_cor
+    surf.fill((0, 0, 0))
+    return surf
+
+
+def death_screen_fade():
+    surf = color_cor
+    surf.fill((0, 0, 0))
+    image = load_image("death_screen.png")[0]
+    surf.blit(image, (0, 0))
+    return surf
 
 
 class Player(pygame.sprite.Sprite):
@@ -401,7 +417,7 @@ class Player(pygame.sprite.Sprite):
         surf = pygame.transform.scale(surf, (image_width, image_height))
         animation = []
         for i in range(n):
-            new_surf = surf.subsurface(surf.get_width()//n * i, 0, surf.get_width()//n, surf.get_height())
+            new_surf = surf.subsurface(surf.get_width() // n * i, 0, surf.get_width() // n, surf.get_height())
             animation.append(new_surf)
         return animation
 
@@ -570,7 +586,7 @@ class CameraGroup(pygame.sprite.Group):
         self.offset.y = self.camera_rect.top - self.camera_borders['top']
 
     def custom_draw(self, player):
-        self.text_surf.fill((0,0,0,0))
+        self.text_surf.fill((0, 0, 0, 0))
 
         if self.level:
             width = round(self.level.width * self.level.tilewidth * player.scale * pxs_in_1px)
@@ -687,9 +703,14 @@ while running:
         if keys[pygame.K_LSHIFT]:  # бежать
             player.sprint = True
     if not player.groups():
+        if color_cor_func != death_screen_fade:
+            FADE_OUT = 1
+            color_cor_func = death_screen_fade
         if keys[pygame.K_r]:
             print("Restarting...")
             restart(CURRENT_LEVEL)
+            color_cor_func = black_screen_fade
+            FADE_OUT = 256 + 5
 
     # HUD
     items = {}
@@ -740,15 +761,25 @@ while running:
                       f"GR {player.onGround}",
                       f"SPRINT {player.sprint}",
                       f"CUR_FR_ANIM {player.cur_fr_anim}",
-                      f"CUR_FR {player.cur_frame}"]
+                      f"CUR_FR {player.cur_frame}",
+                      f"FADE {FADE_OUT}"]
 
-    if 0 < FADE_OUT < 256:
-        color_cor.fill(pygame.Color(0, 0, 0))
+    if FADE_OUT == 1:
+        color_cor_func()
+
+    if FADE_OUT == -1:
+        color_cor.set_alpha(255)
+        screen.blit(color_cor, (0, 0))
+
+    elif 0 < FADE_OUT < 256:
+        # color_cor.fill(pygame.Color(0, 0, 0))
+        # color_cor_func()
         color_cor.set_alpha(FADE_OUT)
         screen.blit(color_cor, (0, 0))
         FADE_OUT += 5
     elif 256 <= FADE_OUT <= 256 + 256:
-        color_cor.fill(pygame.Color(0, 0, 0))
+        # color_cor.fill(pygame.Color(0, 0, 0))
+        # color_cor_func()
         color_cor.set_alpha(256 * 2 - FADE_OUT)
         screen.blit(color_cor, (0, 0))
         FADE_OUT += 5
@@ -759,6 +790,9 @@ while running:
         if teleport:
             CURRENT_LEVEL = teleport.dest
             restart(CURRENT_LEVEL)
+            teleport = None
+        if not player.groups():
+            FADE_OUT = -1
 
     pygame.display.flip()  # обновляем кадр
 
